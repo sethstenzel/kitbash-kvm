@@ -43,6 +43,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      '@tauri-apps/api/shell': fileURLToPath(
+        new URL('./src/utils/tauri-shell-stub.ts', import.meta.url)
+      ),
     },
   },
 })

@@ -420,14 +420,41 @@ const handleImportMacros = () => {
                 Baud Rate
               </label>
               <div class="radio-group">
-                <label class="radio-label" v-for="rate in [9600, 115200]" :key="rate">
+                <label
+                  class="radio-label"
+                  title="General CH9329 Default"
+                >
                   <input
                     type="radio"
-                    :value="rate + ''"
+                    value="9600"
                     v-model="settingsStore.baudRate"
                     class="radio-input"
                   />
-                  <span class="radio-text">{{ rate }}</span>
+                  <span class="radio-text">9600</span>
+                </label>
+                <label
+                  class="radio-label"
+                  title="Sipeed NanoKVM USB Default"
+                >
+                  <input
+                    type="radio"
+                    value="57600"
+                    v-model="settingsStore.baudRate"
+                    class="radio-input"
+                  />
+                  <span class="radio-text">57600</span>
+                </label>
+                <label
+                  class="radio-label"
+                  title="General CH9329 Modified"
+                >
+                  <input
+                    type="radio"
+                    value="115200"
+                    v-model="settingsStore.baudRate"
+                    class="radio-input"
+                  />
+                  <span class="radio-text">115200</span>
                 </label>
               </div>
             </div>
