@@ -53,3 +53,6 @@ Thumbs.db
 # AI
 .claude/*
 .claude
+
+# KiCad
+/kicad/kitbashkvm-protoboard/kitbashkvm-protoboard-backups/
