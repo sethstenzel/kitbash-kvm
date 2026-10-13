@@ -1,3 +1,5 @@
+import {setKeyboardLock} from '@/components/KBKvmController/utils/keyboard-lock'
+
 export interface IClientRectCorners {
   x1: number
   y1: number
@@ -153,11 +155,20 @@ export const selectArea = (
       }
     }
 
+    // Fallback: if the browser still leaves fullscreen (e.g. Esc held down), cancel the selection
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        finish(null)
+      }
+    }
+
     const finish = (result: IClientRectCorners | null) => {
       overlay.removeEventListener('mousedown', handleMouseDown)
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
       window.removeEventListener('keydown', handleKeyDown, true)
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+      setKeyboardLock('area-selection', false)
       clearTimeout(hintTimer)
       overlay.remove()
       active = false
@@ -168,5 +179,8 @@ export const selectArea = (
     window.addEventListener('mousemove', handleMouseMove)
     window.addEventListener('mouseup', handleMouseUp)
     window.addEventListener('keydown', handleKeyDown, true)
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    // In fullscreen the browser keeps Esc (to exit fullscreen) unless the keyboard is locked
+    setKeyboardLock('area-selection', true)
   })
 }

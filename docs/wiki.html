@@ -359,11 +359,20 @@
     </ol>
     <div class="callout tip">
       <span class="icon">💡</span>
-      <div class="body">For a Sipeed NanoKVM USB, use baud rate <strong>57600</strong>. For a standard CH9329 module, use <strong>9600</strong>.</div>
+      <div class="body">Use baud rate <strong>9600</strong> for a KitBash KVM or <strong>57600</strong> for a Sipeed USB KVM (set automatically when a KitBash capture card is detected).</div>
     </div>
     <div class="callout info">
       <span class="icon">ℹ</span>
       <div class="body">The selected video device is remembered: it starts automatically next time, and if it is not plugged in yet, the stream starts as soon as it appears.</div>
+      <div class="body"><strong>KitBash capture cards are picked automatically.</strong> On start, the app looks for a KitBash capture card and, if one is plugged in, selects it (overriding the last-used devices), sets the matching <strong>Baud Rate</strong>, and starts streaming:</div>
+      <table>
+        <thead><tr><th>Preference</th><th>Video device</th><th>Audio device</th><th>Baud rate</th></tr></thead>
+        <tbody>
+        <tr><td>1</td><td><code>USB2 Video</code></td><td><code>Digital Audio Interface (USB2 Digital Audio)</code></td><td><code>57600</code></td></tr>
+        <tr><td>2</td><td><code>USB Video</code></td><td><code>Digital Audio Interface (USB Digital Audio)</code></td><td><code>9600</code></td></tr>
+        </tbody>
+      </table>
+      <div class="body">Names are matched by "contains", so Chrome's <code>Default - Digital Audio Interface (…)</code> entry matches too; the card's own audio entry is preferred over that alias so the selection doesn't follow the Windows default device.</div>
     </div>
   </section>
 
@@ -488,9 +497,9 @@
     <table>
       <thead><tr><th>Baud Rate</th><th>Device</th></tr></thead>
       <tbody>
-        <tr><td><code>9600</code></td><td>Standard CH9329 module (default firmware)</td></tr>
-        <tr class="highlight-row"><td><code>57600</code></td><td>Sipeed NanoKVM USB (default firmware)</td></tr>
-        <tr><td><code>115200</code></td><td>Modified CH9329 firmware</td></tr>
+        <tr><td><code>9600</code></td><td>KitBash KVM default (standard CH9329 firmware)</td></tr>
+        <tr class="highlight-row"><td><code>57600</code></td><td>Sipeed USB KVM default</td></tr>
+        <tr><td><code>115200</code></td><td>Other (e.g. modified CH9329 firmware)</td></tr>
       </tbody>
     </table>
     <ol class="steps" start="2">

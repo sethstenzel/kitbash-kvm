@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import KbIcon from '@/components/KBKvmController/UI/KbIcon.vue'
+import {setKeyboardLock} from '@/components/KBKvmController/utils/keyboard-lock'
 import {computed, onBeforeUnmount, ref, watch} from 'vue'
 import {useEventListener} from '@vueuse/core'
 import ActionDropdown from '@/components/KBKvmController/UI/ActionDropdown.vue'
@@ -382,19 +383,7 @@ useEventListener(document, 'visibilitychange', () => {
 })
 
 // In fullscreen, Keyboard Lock lets Ctrl+W/T/N, Alt+Tab etc. reach the target
-const syncKeyboardLock = () => {
-  const keyboard = navigator.keyboard
-  if (!keyboard) {
-    return
-  }
-  if (document.fullscreenElement && serialPort.value) {
-    keyboard.lock().catch((error) => console.warn('Keyboard lock failed:', error))
-  } else {
-    keyboard.unlock()
-  }
-}
-useEventListener(document, 'fullscreenchange', syncKeyboardLock)
-watch(serialPort, syncKeyboardLock)
+watch(serialPort, (port) => setKeyboardLock('kvm', !!port), {immediate: true})
 
 /* ---------------- Mouse: shared ---------------- */
 
@@ -738,7 +727,7 @@ watch(
 onBeforeUnmount(() => {
   releaseAllInput()
   stopCapture()
-  navigator.keyboard?.unlock()
+  setKeyboardLock('kvm', false)
   disposeSerialRelease()
   disposeSerialClosed()
 })

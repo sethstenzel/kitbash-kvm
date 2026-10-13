@@ -74,7 +74,15 @@ const show = (el: HTMLElement) => {
     return
   }
   const t = getTip()
-  t.textContent = text
+  // First line is the label; any further lines (newlines in the title) are a smaller hint
+  const [label, ...hints] = text.split('\n')
+  t.replaceChildren(label)
+  hints.forEach((line) => {
+    const hint = document.createElement('span')
+    hint.className = 'kb-tooltip-hint'
+    hint.textContent = line
+    t.append(hint)
+  })
   position(el, t)
   t.classList.add('visible')
 }

@@ -53,7 +53,7 @@ const startScan = async () => {
   eventBus.emit('scan_start')
   try {
     const rect = await selectArea(video, {
-      color: '#ff9800',
+      color: '#004264', // command bar / menu blue, same as screenshots
       hint: 'Select area to extract text (ESC to cancel)',
       spotlight: true,
       hintTimeout: 2000,
@@ -139,11 +139,3 @@ onBeforeUnmount(() => {
     <KbIcon name="ocr" />
   </button>
 </template>
-
-<style lang="scss" scoped>
-.btn-ocr-scanner {
-  &.active {
-    color: #ff9800;
-  }
-}
-</style>

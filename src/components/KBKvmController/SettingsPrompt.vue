@@ -134,6 +134,13 @@ watch(
 )
 
 const panelRef = ref<HTMLElement>()
+// Baud rates with the KVM each is the default for (captions under the radios)
+const BAUD_RATE_OPTIONS = [
+  {value: '9600', caption: 'KitBash KVM Default'},
+  {value: '57600', caption: 'Sipeed USB KVM Default'},
+  {value: '115200', caption: 'Other'},
+]
+
 // About (Advanced tab); the version comes from package.json, which also versions the installers
 const appVersion = getVersion()
 const buildDate = BUILD_TIMESTAMP ? displayTimestamp(new Date(BUILD_TIMESTAMP)) : 'Unknown'
@@ -631,19 +638,14 @@ const handleImportMacros = () => {
                     <span class="mdi mdi-speedometer"></span>
                     Baud Rate
                   </label>
-                  <div class="radio-group">
-                    <label class="radio-label" title="General CH9329 Default">
-                      <input type="radio" value="9600" v-model="settingsStore.baudRate" class="radio-input" />
-                      <span class="radio-text">9600</span>
-                    </label>
-                    <label class="radio-label" title="Sipeed NanoKVM USB Default">
-                      <input type="radio" value="57600" v-model="settingsStore.baudRate" class="radio-input" />
-                      <span class="radio-text">57600</span>
-                    </label>
-                    <label class="radio-label" title="General CH9329 Modified">
-                      <input type="radio" value="115200" v-model="settingsStore.baudRate" class="radio-input" />
-                      <span class="radio-text">115200</span>
-                    </label>
+                  <div class="radio-group baud-options">
+                    <div v-for="option in BAUD_RATE_OPTIONS" :key="option.value" class="baud-option">
+                      <label class="radio-label">
+                        <input type="radio" :value="option.value" v-model="settingsStore.baudRate" class="radio-input" />
+                        <span class="radio-text">{{ option.value }}</span>
+                      </label>
+                      <span class="baud-caption">{{ option.caption }}</span>
+                    </div>
                   </div>
                 </div>
                 </template>
@@ -2073,6 +2075,26 @@ const handleImportMacros = () => {
 }
 
 // Advanced Tab Styles
+.baud-options {
+  .baud-option {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 6px;
+    min-width: fit-content;
+
+    .radio-label {
+      flex: none;
+    }
+  }
+
+  .baud-caption {
+    font-size: 12px;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.55);
+  }
+}
+
 .about-list {
   margin: 0;
 

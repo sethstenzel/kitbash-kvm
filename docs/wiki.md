@@ -35,11 +35,20 @@ KitBash KVM is a browser/desktop application that lets you control a remote comp
 2. Connect your CH9329/NanoKVM USB adapter between your computer and the target machine.
 3. Open KitBash KVM and allow camera and microphone access when the browser asks. (If access was denied, the source icons show a warning badge — click one to ask again.)
 4. Click the **Video Source** icon in the command bar and pick your capture card — the stream starts right away. Optionally pick the capture card's audio from the **Audio Source** icon.
-5. Set the correct **Baud Rate** in **Settings → Settings tab** (`57600` for a Sipeed NanoKVM USB, `9600` for a standard CH9329).
+5. Set the correct **Baud Rate** in **Settings → Settings tab** (`9600` for a KitBash KVM, `57600` for a Sipeed USB KVM; set automatically when a KitBash capture card is detected).
 6. Click **Connect KVM (Serial)** and choose the adapter's port in the browser's port chooser. If no baud rate has been set yet, the app asks for one (default `9600`).
 7. Keyboard input is now forwarded to the target. Click the video to capture the mouse.
 
 The selected video device is remembered: it starts automatically next time, and if it is not plugged in yet, the stream starts as soon as it appears.
+
+**KitBash capture cards are picked automatically.** On start, the app looks for a KitBash capture card and, if one is plugged in, selects it (overriding the last-used devices), sets the matching **Baud Rate**, and starts streaming:
+
+| Preference | Video device | Audio device | Baud rate |
+|------------|--------------|--------------|-----------|
+| 1 | `USB2 Video` | `Digital Audio Interface (USB2 Digital Audio)` | `57600` |
+| 2 | `USB Video` | `Digital Audio Interface (USB Digital Audio)` | `9600` |
+
+Names are matched by "contains", so Chrome's `Default - Digital Audio Interface (…)` entry matches too; the card's own audio entry is preferred over that alias so the selection doesn't follow the Windows default device.
 
 ---
 
@@ -152,9 +161,11 @@ Mouse input, screenshots, OCR and QR scans all follow the rotation and flips. **
 ### Connecting
 
 1. Choose the correct **Baud Rate** in **Settings → Settings tab**:
-   - `9600` — Standard CH9329 default
-   - `57600` — Sipeed NanoKVM USB default
-   - `115200` — Modified CH9329 firmware
+   - `9600` — KitBash KVM default (standard CH9329 firmware)
+   - `57600` — Sipeed USB KVM default
+   - `115200` — Other (e.g. modified CH9329 firmware)
+
+   Each option is captioned with the KVM it's the default for.
 2. Click **Connect KVM (Serial)** in the command bar and select the adapter's port.
 
 After connecting, the app asks the chip for its info. If it does not answer, a warning says the baud rate may be wrong. Changing the baud rate while connected closes the connection; connect again afterwards.

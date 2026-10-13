@@ -86,9 +86,15 @@ corners_in = 'M9,4.5V9H4.5 M15,4.5V9H19.5 M19.5,15H15V19.5 M4.5,15H9V19.5'
 scan_corners = 'M3.5,8V3.5H8 M16,3.5H20.5V8 M20.5,16V20.5H16 M8,20.5H3.5V16'
 eye = 'M2.5,12C5.5,6.5 18.5,6.5 21.5,12C18.5,17.5 5.5,17.5 2.5,12Z'
 pin_body = 'M9,3.5H15 M10.25,3.5V8.5L7,12.5H17L13.75,8.5V3.5'
-plug = [
-    part(P('M10,8V4.5 M14,8V4.5')),
-    part(P('M7.5,8H16.5V11.5A4.5,4.5 0 0 1 7.5,11.5Z')),
+# DB-9 serial connector: trapezoid shell with 5 + 4 pins (pins slightly thinner so they stay apart)
+def pins(points):
+    return [part(f'<path d="M{x},{y}h0" stroke-width="1.9"/>') for x, y in points]
+
+
+db9 = [
+    part(P('M2,6H22L19.5,18H4.5Z')),
+    *pins([(6.6, 10), (9.3, 10), (12, 10), (14.7, 10), (17.4, 10)]),
+    *pins([(7.95, 14), (10.65, 14), (13.35, 14), (16.05, 14)]),
 ]
 
 ICONS = {
@@ -139,12 +145,8 @@ ICONS = {
         solid(C(12, 12, 4.5), RED),
     ],
     # KVM input
-    'serial-connect': [*plug, part(P('M12,16V20.5'))],
-    'serial-disconnect': [
-        *plug,
-        part(P('M12,16V17.25 M12,19.75V20.5')),
-        part(P('M4,20L20,4')),
-    ],
+    'serial-connect': db9,
+    'serial-disconnect': [*db9, part(P('M4,20L20,4'))],
     'text-transfer': [
         part(RECT(5, 4.5, 14, 16.5, 2)),
         solid(RECT(9, 2.75, 6, 3, 1)),

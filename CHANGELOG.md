@@ -5,6 +5,42 @@ Versions follow [Semantic Versioning](https://semver.org/): **MAJOR** for breaki
 **MINOR** for new features, **PATCH** for fixes. The version lives in `package.json` and is
 used by the web app (Settings > Advanced > About) and the desktop installers.
 
+## [2.2.1] - 2026-10-13
+
+### Changed
+- Settings: each baud rate option is captioned with the KVM it is the default for: 9600
+  "KitBash KVM Default", 57600 "Sipeed USB KVM Default", 115200 "Other".
+
+## [2.2.0] - 2026-10-13
+
+### Added
+- An auto-selected KitBash capture card also sets the KVM baud rate: 57600 for the
+  "USB2 Video" card, 9600 for the "USB Video" card.
+
+## [2.1.0] - 2026-10-13
+
+### Added
+- On start, a plugged-in KitBash capture card is selected automatically (overriding the last-used
+  devices): "USB2 Video" + "Digital Audio Interface (USB2 Digital Audio)" first, then "USB Video" +
+  "Digital Audio Interface (USB Digital Audio)". The card's own audio entry is preferred over
+  Chrome's "Default - …" alias.
+
+## [2.0.3] - 2026-10-13
+
+### Fixed
+- Esc now cancels a screenshot, OCR or QR area selection in fullscreen too (the keyboard is locked
+  while selecting, so the browser doesn't consume Esc to leave fullscreen).
+
+### Changed
+- OCR and QR area selections use the same menu-blue crosshair and selection box as screenshots.
+- Serial (KVM) connect/disconnect icons are now a DB-9 serial connector instead of a power plug.
+
+## [2.0.2] - 2026-10-13
+
+### Changed
+- Command bar tooltips support a second, smaller hint line; the screenshot button shows
+  "(Shift+Click for full screen)" on its own line.
+
 ## [2.0.1] - 2026-10-13
 
 ### Fixed

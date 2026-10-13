@@ -32,7 +32,7 @@ const startScan = async () => {
   eventBus.emit('scan_start')
   try {
     const rect = await selectArea(video, {
-      color: '#00ffff',
+      color: '#004264', // command bar / menu blue, same as screenshots
       hint: 'Select area to scan for QR code (ESC to cancel)',
       spotlight: true,
       hintTimeout: 2000,
@@ -103,11 +103,3 @@ onBeforeUnmount(() => {
     <KbIcon name="qr-scan" />
   </button>
 </template>
-
-<style lang="scss" scoped>
-.btn-qr-scanner {
-  &.active {
-    color: #00ffff;
-  }
-}
-</style>

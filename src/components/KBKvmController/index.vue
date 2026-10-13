@@ -29,6 +29,7 @@ import {usePlayerUI} from './composables/usePlayerUI'
 import {isPromptVisible} from '@/components/PromptInput/prompt-input'
 import {eventBus} from '@/utils/event-bus'
 import {isTauri} from '@/utils'
+import {findKnownCaptureDevices} from '@/components/KBKvmController/utils/known-devices'
 import {useSerialState} from '@/components/KBKvmController/utils/serial-state'
 
 const settingsStore = useSettingsStore()
@@ -363,6 +364,17 @@ const initDevices = async () => {
       await updateDeviceList()
     }
 
+    // A KitBash capture card that's plugged in always wins over the last-used selection,
+    // and sets the baud rate of the KVM it comes with
+    const known = findKnownCaptureDevices(videoDeviceList.value, audioDeviceList.value)
+    if (known) {
+      settingsStore.baudRate = known.baudRate
+      settingsStore.currentVideoDeviceId = known.videoId
+      if (known.audioId) {
+        settingsStore.currentAudioDeviceId = known.audioId
+      }
+    }
+
     if (settingsStore.currentVideoDeviceId) {
       // Saved device not plugged in yet: resume automatically once it appears
       waitingForVideoDevice.value = !videoDeviceList.value.some(
@@ -594,7 +606,7 @@ onBeforeUnmount(() => {
                 class="btn-no-style"
                 @click="handleScreenshot($event)"
                 :disabled="!isStreaming"
-                title="Area Screenshot (Shift+Click for full screen)"
+                :title="'Area Screenshot\n(Shift+Click for full screen)'"
               >
                 <KbIcon name="screenshot" />
               </button>
