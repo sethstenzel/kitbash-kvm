@@ -9,6 +9,8 @@ lerna-debug.log*
 
 # Node / Frontend
 node_modules/
+# Project uses yarn (yarn.lock); don't commit an npm lockfile
+package-lock.json
 dist/
 dist-ssr
 build/

@@ -32,8 +32,7 @@ export enum CmdType {
   CMD_RESET = 0x0f,
 }
 
-export const genPacket = (cmd: CmdType, ...data: any[]) => {
-  // console.log(data)
+export const genPacket = (cmd: CmdType, ...data: number[]) => {
   for (const v of data) if (v < 0 || v > 0xff) throw v
   const ret = [
     // Frame header: 2 bytes, fixed as 0x57, 0xAB
@@ -82,8 +81,8 @@ export enum MediaKey {
   NEXT_TRACK = 'Next Track',
   PLAY_PAUSE = 'Play/Pause',
   MUTE = 'Mute',
-  VOLUME_PLUS = 'Volume-',
-  VOLUME_MINUS = 'Volume+',
+  VOLUME_PLUS = 'Volume+',
+  VOLUME_MINUS = 'Volume-',
   REFRESH = 'Refresh',
   STOP = 'Stop',
   FORWARD = 'Forward',
@@ -102,6 +101,7 @@ export enum MediaKey {
   MEDIA = 'Media',
 }
 
+// Each row is one data byte, listed BIT7 -> BIT0 (see indexToBinary)
 export const mediaKeyMatrix = [
   [
     MediaKey.EJECT,
@@ -110,8 +110,8 @@ export const mediaKeyMatrix = [
     MediaKey.NEXT_TRACK,
     MediaKey.PLAY_PAUSE,
     MediaKey.MUTE,
-    MediaKey.VOLUME_PLUS,
     MediaKey.VOLUME_MINUS,
+    MediaKey.VOLUME_PLUS,
   ],
   [
     MediaKey.REFRESH,
@@ -135,7 +135,80 @@ export const mediaKeyMatrix = [
   ],
 ]
 
-//  arr[1] -> 0b10000000, arr[2] -> 0b01000000, arr[6] -> 0b00000001
+// arr[0] -> 0b10000000, arr[1] -> 0b01000000, arr[7] -> 0b00000001
 export const indexToBinary = (index: number) => {
   return 1 << (7 - index) // 7 - index ensures 1 is shifted to the appropriate bit position
+}
+
+/** Keyboard report: modifier byte, reserved byte, up to 6 key usage IDs */
+export const keyboardPacket = (modifiers: number, keys: number[] = []) => {
+  const slots = [0, 0, 0, 0, 0, 0]
+  keys.slice(0, 6).forEach((k, i) => (slots[i] = k))
+  return genPacket(CmdType.CMD_SEND_KB_GENERAL_DATA, modifiers & 0xff, 0, ...slots)
+}
+
+export const KEYBOARD_RELEASE_PACKET = keyboardPacket(0)
+
+/** Relative mouse report; dx, dy and wheel are signed bytes (wheel > 0 scrolls up) */
+export const relativeMousePacket = (buttons: number, dx = 0, dy = 0, wheel = 0) =>
+  genPacket(
+    CmdType.CMD_SEND_MS_REL_DATA,
+    0x01,
+    buttons & 0x07,
+    i8clamp(dx) & 0xff,
+    i8clamp(dy) & 0xff,
+    i8clamp(wheel) & 0xff,
+  )
+
+export const ABS_MAX = 4095
+
+/** Absolute mouse report; x and y in 0..ABS_MAX */
+export const absoluteMousePacket = (buttons: number, x: number, y: number, wheel = 0) =>
+  genPacket(
+    CmdType.CMD_SEND_MS_ABS_DATA,
+    0x02,
+    buttons & 0x07,
+    ...decomposeHexToBytes(Math.min(ABS_MAX, Math.max(0, Math.round(x)))),
+    ...decomposeHexToBytes(Math.min(ABS_MAX, Math.max(0, Math.round(y)))),
+    i8clamp(wheel) & 0xff,
+  )
+
+export interface ICh9329Frame {
+  addr: number
+  cmd: number
+  data: number[]
+}
+
+/**
+ * Incremental parser for frames sent by the chip:
+ * 0x57 0xAB, addr, cmd (request | 0x80 on success, | 0xC0 on error), len, data, checksum
+ */
+export class Ch9329FrameParser {
+  private buf: number[] = []
+
+  push(chunk: Uint8Array): ICh9329Frame[] {
+    const frames: ICh9329Frame[] = []
+    for (const b of chunk) this.buf.push(b)
+    while (this.buf.length >= 6) {
+      if (this.buf[0] !== 0x57 || this.buf[1] !== 0xab) {
+        this.buf.shift()
+        continue
+      }
+      const len = this.buf[4]
+      const total = 5 + len + 1
+      if (this.buf.length < total) break
+      let sum = 0
+      for (let i = 0; i < total - 1; i++) sum = (sum + this.buf[i]) & 0xff
+      if (sum !== this.buf[total - 1]) {
+        // Bad checksum: resync on the next header
+        this.buf.shift()
+        continue
+      }
+      frames.push({addr: this.buf[2], cmd: this.buf[3], data: this.buf.slice(5, 5 + len)})
+      this.buf.splice(0, total)
+    }
+    // Garbage without a header can't grow unbounded
+    if (this.buf.length > 512) this.buf = []
+    return frames
+  }
 }

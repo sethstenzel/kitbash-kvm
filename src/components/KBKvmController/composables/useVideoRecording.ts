@@ -1,4 +1,4 @@
-import {ref, onMounted, type Ref} from 'vue'
+import {ref, onMounted, onBeforeUnmount, type Ref} from 'vue'
 import {VideoRecorder} from '../utils/video-recorder'
 
 /**
@@ -12,6 +12,10 @@ export function useVideoRecording(videoRef: Ref<HTMLVideoElement | undefined>) {
     if (videoRef.value) {
       videoRecorder.value = new VideoRecorder(videoRef.value)
     }
+  })
+
+  onBeforeUnmount(() => {
+    videoRecorder.value?.stop()
   })
 
   return {

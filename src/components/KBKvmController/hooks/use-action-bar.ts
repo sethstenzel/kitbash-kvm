@@ -1,14 +1,14 @@
 import {onBeforeUnmount, onMounted, ref, shallowRef, watch} from 'vue'
 import {useSettingsStore} from '@/stores/settings'
 import {CursorHider} from '@/components/KBKvmController/utils/cursor-hider'
-import {useStorage} from '@vueuse/core'
 
 export const useActionBar = () => {
   const mouseHider = shallowRef()
   const actionBarRef = shallowRef()
   const settingsStore = useSettingsStore()
 
-  const isShowFloatBar = useStorage('wmd__is_show_float_bar', true)
+  // Not persisted: there is no UI to bring a hidden bar back after a reload
+  const isShowFloatBar = ref(true)
 
   watch(
     () => settingsStore.enableKvmInput,

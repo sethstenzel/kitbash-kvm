@@ -1,14 +1,25 @@
-export function snapVideoImage(video: HTMLVideoElement) {
-  const canvas = document.createElement('canvas')
-  canvas.width = video.videoWidth
-  canvas.height = video.videoHeight
-  canvas.getContext('2d')!.drawImage(video, 0, 0, video.videoWidth, video.videoHeight)
+import {drawVideoRegion, type IVideoOrientation} from './video-geometry'
 
-  // Convert canvas to png format and save
-  return canvas.toDataURL('image/png')
+/** Full frame at native resolution, rotated/flipped the way it is displayed */
+export function snapVideoImage(video: HTMLVideoElement, orientation: IVideoOrientation) {
+  return drawVideoRegion(video, orientation)
 }
 
-export const downloadUrl = (url: string, filename?) => {
+/** Save a canvas as a PNG download */
+export const downloadCanvas = (canvas: HTMLCanvasElement, filename: string) => {
+  canvas.toBlob((blob) => {
+    if (!blob) {
+      window.$notification({type: 'error', message: 'Failed to encode image', timeout: 3000})
+      return
+    }
+    const url = URL.createObjectURL(blob)
+    downloadUrl(url, filename)
+    // Revoke once the download has had time to start
+    setTimeout(() => URL.revokeObjectURL(url), 10000)
+  }, 'image/png')
+}
+
+export const downloadUrl = (url: string, filename = '') => {
   // Create a virtual <a> tag
   const a = document.createElement('a')
   // Set href to file URL
@@ -57,6 +68,7 @@ export const copyToClipboard = (text): Promise<void> => {
       } catch (error) {
         reject(error)
       } finally {
+        textarea.blur()
         document.body.removeChild(textarea)
       }
     }

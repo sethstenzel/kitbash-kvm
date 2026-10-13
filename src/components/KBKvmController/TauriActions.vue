@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import KbIcon from '@/components/KBKvmController/UI/KbIcon.vue'
 import {ref} from 'vue'
 import {window} from '@tauri-apps/api'
-import {uniOpenUrl} from '@/utils'
 
 let curWin = window.getCurrent()
 const isFullscreen = ref(false)
@@ -18,15 +18,15 @@ function toggleTop() {
 
 <template>
   <button class="btn-no-style" @click="toggleFullScreen">
-    <span v-if="!isFullscreen" class="mdi mdi-fullscreen"></span>
-    <span v-else class="mdi mdi-fullscreen-exit"></span>
+    <KbIcon v-if="!isFullscreen" name="fullscreen" />
+    <KbIcon v-else name="fullscreen-exit" />
   </button>
   <button
     class="btn-no-style"
     :class="[isTop ? 'active' : '']"
     @click="toggleTop"
-    title="Pin window top"
+    :title="isTop ? 'Unpin window' : 'Keep window on top'"
   >
-    {{ isTop ? '📌' : '🔝' }}
+    <KbIcon :name="isTop ? 'pin' : 'pin-off'" />
   </button>
 </template>

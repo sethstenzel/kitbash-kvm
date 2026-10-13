@@ -1,4 +1,4 @@
-import {ref, computed, shallowRef, type Ref} from 'vue'
+import {ref, computed, type Ref} from 'vue'
 import {useFullscreen} from '@vueuse/core'
 import {useSettingsStore} from '@/stores/settings'
 
@@ -11,7 +11,7 @@ interface UsePlayerUIOptions {
  * Composable for player UI state management
  * Handles fullscreen, settings dialog, loading states, and action bar visibility
  */
-export function usePlayerUI(rootRef: Ref<HTMLElement | undefined>, options: UsePlayerUIOptions) {
+export function usePlayerUI(options: UsePlayerUIOptions) {
   const {isShowFloatBar, isShowFloatBarInNonKvmMode} = options
   const settingsStore = useSettingsStore()
 
@@ -21,7 +21,9 @@ export function usePlayerUI(rootRef: Ref<HTMLElement | undefined>, options: UseP
   const criticalError = ref<{message: string; details?: string} | null>(null)
 
   // Fullscreen
-  const {toggle: toggleFullScreen, isFullscreen} = useFullscreen(rootRef)
+  // Whole document, not just the player: dropdowns, notifications and prompts are teleported
+  // to <body> and would be invisible if only the player element were fullscreen
+  const {toggle: toggleFullScreen, isFullscreen} = useFullscreen(document.documentElement)
 
   // Computed
   const isActionBarVisible = computed(() => {

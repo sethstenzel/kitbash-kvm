@@ -1,9 +1,11 @@
 import {computed, type Ref} from 'vue'
-import {useSettingsStore} from '@/stores/settings'
+import {useElementSize} from '@vueuse/core'
+import {useSettingsStore, isValidCssFilter} from '@/stores/settings'
 
 interface UseVideoFiltersOptions {
   graphInfo: Ref<{width: number; height: number; aspectRatio: number}>
-  isFullscreen: Ref<boolean>
+  // Element the video is laid out in (centered); its size bounds the video
+  containerRef: Ref<HTMLElement | undefined>
 }
 
 /**
@@ -11,8 +13,9 @@ interface UseVideoFiltersOptions {
  * Handles mirroring, rotation, CSS filters, and aspect ratio adjustments
  */
 export function useVideoFilters(options: UseVideoFiltersOptions) {
-  const {graphInfo, isFullscreen} = options
+  const {graphInfo, containerRef} = options
   const settingsStore = useSettingsStore()
+  const {width: containerWidth, height: containerHeight} = useElementSize(containerRef)
 
   /**
    * Computed style for video filters (mirroring and CSS filters)
@@ -36,9 +39,10 @@ export function useVideoFilters(options: UseVideoFiltersOptions) {
       style.transform = transforms.join(' ')
     }
 
-    if (settingsStore.inputFilter) {
+    // An invalid custom filter falls back to the presets instead of silently dropping all filtering
+    if (settingsStore.inputFilter && isValidCssFilter(settingsStore.inputFilter)) {
       style.filter = settingsStore.inputFilter
-    } else if (settingsStore.selectedFilters) {
+    } else if (settingsStore.selectedFilters?.length) {
       style.filter = settingsStore.selectedFilters.join(' ')
     }
     if (settingsStore.fitMode) {
@@ -48,62 +52,40 @@ export function useVideoFilters(options: UseVideoFiltersOptions) {
   })
 
   /**
-   * Computed style for video wrapper (rotation and scaling)
+   * Computed style for the video wrapper: explicit pixel size plus rotation about its center.
+   * The wrapper is sized in its unrotated frame, so for ±90° width and height are swapped and
+   * after rotation it exactly covers the area the video occupies on screen.
    */
   const videoWrapperStyle = computed(() => {
-    const style: any = {}
     const rotation = settingsStore.filterRotation || 0
-    const isVerticalRotation = rotation === 90 || rotation === -90
-
-    // Apply rotation and scaling transform to the wrapper
-    const transforms: string[] = []
-
-    if (rotation && rotation !== 0) {
-      transforms.push(`rotate(${rotation}deg)`)
+    const quarterTurn = Math.abs(rotation) % 180 === 90
+    const cw = containerWidth.value
+    const ch = containerHeight.value
+    if (!cw || !ch) {
+      return {width: '100%', height: '100%'}
     }
 
-    // For vertical rotations, we need to scale the wrapper to fit properly
-    // The wrapper dimensions are swapped, so we scale based on the aspect ratio difference
-    if (isVerticalRotation && settingsStore.fitMode === 'contain' && graphInfo.value.aspectRatio) {
-      // When in fullscreen, calculate scale based on viewport dimensions
-      // Otherwise, use the video's aspect ratio
-      let scaleFactor: number
-
-      if (isFullscreen.value) {
-        // In fullscreen with vertical rotation, we need to maximize the use of available space
-        // The rotated video's effective aspect ratio is inverted (1 / originalAspect)
-        const viewportAspectRatio = window.innerWidth / window.innerHeight
-        const videoAspectRatio = graphInfo.value.aspectRatio
-
-        // Scale to fit the rotated video within the fullscreen viewport
-        // Use max to ensure we fill the available space
-        scaleFactor = Math.max(viewportAspectRatio * videoAspectRatio, 1)
-      } else {
-        // Non-fullscreen: use the original aspect ratio scaling
-        scaleFactor = graphInfo.value.aspectRatio
-      }
-
-      transforms.push(`scale(${scaleFactor})`)
-    }
-
-    if (transforms.length > 0) {
-      style.transform = transforms.join(' ')
-    }
-
-    // When in contain mode, adjust aspect ratio based on rotation
-    if (settingsStore.fitMode === 'contain' && graphInfo.value.aspectRatio) {
-      if (isVerticalRotation) {
-        // Swap aspect ratio for vertical rotations
-        style.aspectRatio = 1 / graphInfo.value.aspectRatio
-      } else {
-        style.aspectRatio = graphInfo.value.aspectRatio
-      }
+    let width: number
+    let height: number
+    const videoAR = graphInfo.value.aspectRatio
+    if (settingsStore.fitMode === 'contain' && videoAR > 0) {
+      // Largest box with the displayed aspect ratio that fits the container
+      const shownAR = quarterTurn ? 1 / videoAR : videoAR
+      const shownW = Math.min(cw, ch * shownAR)
+      const shownH = shownW / shownAR
+      width = quarterTurn ? shownH : shownW
+      height = quarterTurn ? shownW : shownH
     } else {
-      style.width = '100%'
-      style.height = '100%'
+      // Other fit modes fill the whole container; object-fit handles the video inside
+      width = quarterTurn ? ch : cw
+      height = quarterTurn ? cw : ch
     }
 
-    return style
+    return {
+      width: `${Math.floor(width)}px`,
+      height: `${Math.floor(height)}px`,
+      transform: rotation ? `rotate(${rotation}deg)` : undefined,
+    }
   })
 
   /**

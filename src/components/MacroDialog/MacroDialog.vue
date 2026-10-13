@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import {ref, watch} from 'vue'
+import {computed, ref, watch} from 'vue'
 import {useVModel} from '@vueuse/core'
 import type {IMacro} from '@/stores/macros'
+import {useSettingsStore} from '@/stores/settings'
+import {getEscapeMarkers} from '@/components/KBKvmController/utils/send-text'
 
 interface Props {
   visible: boolean
@@ -15,6 +17,13 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const mVisible = useVModel(props, 'visible', emit)
+
+const settingsStore = useSettingsStore()
+// Wrap a command in the configured escape markers, e.g. cmd('ENTER') -> '[[ENTER]]'
+const cmd = computed(() => {
+  const [open, close] = getEscapeMarkers(settingsStore.advancedTextEscapeStyle)
+  return (command: string) => `${open}${command}${close}`
+})
 
 const macroName = ref('')
 const macroMessage = ref('')
@@ -112,13 +121,13 @@ const handleCancel = () => {
             <label class="form-label">
               <span class="mdi mdi-text"></span>
               Macro Message
-              <span class="help-text">Use |||COMMAND||| syntax for special keys</span>
+              <span class="help-text">Use {{ cmd('COMMAND') }} syntax for special keys</span>
             </label>
             <textarea
               v-model="macroMessage"
               class="themed-input"
               rows="8"
-              placeholder="Example: sudo apt update|||ENTER|||"
+              :placeholder="`Example: sudo apt update${cmd('ENTER')}`"
             ></textarea>
           </div>
 
@@ -127,10 +136,11 @@ const handleCancel = () => {
             <div class="info-content">
               <strong>Command Key Syntax:</strong>
               <ul>
-                <li>Special keys: |||ENTER|||, |||TAB|||, |||ESC|||</li>
-                <li>Modifiers: |||CTRL+C|||, |||ALT+F4|||, |||SHIFT+TAB|||</li>
-                <li>Function keys: |||F1|||, |||F2|||, ... |||F12|||</li>
-                <li>Delay: |||DELAY=3||| (wait 3 seconds before continuing)</li>
+                <li>Special keys: {{ cmd('ENTER') }}, {{ cmd('TAB') }}, {{ cmd('ESC') }}</li>
+                <li>Modifiers: {{ cmd('CTRL+C') }}, {{ cmd('ALT+F4') }}, {{ cmd('SHIFT+TAB') }}</li>
+                <li>Function keys: {{ cmd('F1') }}, {{ cmd('F2') }}, ... {{ cmd('F12') }}</li>
+                <li>Delay: {{ cmd('DELAY=3') }} (wait 3 seconds before continuing)</li>
+                <li>Markers follow the Adv. Text Escape Sequence setting; |||CMD||| also works</li>
               </ul>
             </div>
           </div>

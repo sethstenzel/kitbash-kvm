@@ -10,6 +10,7 @@ const props = withDefaults(
     closeOnClickOutside?: boolean
     type: 'input' | 'textarea'
     inputProps?: any
+    contentStyle?: any
     validator?: (value: string) => any
   }>(),
   {
@@ -58,8 +59,10 @@ const handleOutsideClick = () => {
       <form
         ref="formRef"
         @submit.prevent="handleConfirm"
+        @keydown.ctrl.enter.prevent="handleConfirm"
         @click.stop
         class="popup-content panel-blur-bg"
+        :style="contentStyle"
       >
         <div v-if="title" class="popup-title">{{ title }}</div>
 
@@ -97,7 +100,6 @@ const handleOutsideClick = () => {
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(8px);
   padding: 20px;
   z-index: 2000;
   display: flex;

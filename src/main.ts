@@ -1,11 +1,12 @@
 import pkg from '../package.json'
-import moment from 'moment/moment'
+import {displayTimestamp} from '@/utils/format-date'
 
 /**
  * Output package version information
  */
-// @ts-ignore
-const timeDisplay = BUILD_TIMESTAMP ? moment(BUILD_TIMESTAMP).format('YYYY-MM-DD HH:mm:ss') : 'N/A'
+const timeDisplay = BUILD_TIMESTAMP
+  ? displayTimestamp(new Date(BUILD_TIMESTAMP))
+  : 'N/A'
 console.info(
   `%c ${pkg.name} ${pkg.version} ${import.meta.env.MODE} %c ${timeDisplay} %c`,
   'background:#004C3F; border-radius: 3px 0 0 3px; padding:2px 0; color: #f9f9f9; font-size: 10px;',
@@ -14,17 +15,15 @@ console.info(
 )
 
 import './assets/main.scss'
-import '@mdi/font/css/materialdesignicons.min.css'
+import './assets/mdi.scss'
 
 import {createApp} from 'vue'
 import App from './App.vue'
 import {createPinia} from 'pinia'
-import router from './router'
 import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 
 const app = createApp(App)
 
-app.use(router)
 const pinia = createPinia()
 pinia.use(piniaPluginPersistedstate)
 app.use(pinia)

@@ -12,7 +12,7 @@ const videoSize = {
 }
 
 export class QrcodeDecoder {
-  timerCapture: null | NodeJS.Timeout
+  timerCapture: null | ReturnType<typeof setTimeout>
   canvasElem: null | HTMLCanvasElement
   gCtx: null | CanvasRenderingContext2D
   stream: null | MediaStream
@@ -105,7 +105,7 @@ export class QrcodeDecoder {
       clearTimeout(this.timerCapture)
     }
     const proms = () => {
-      const p = new Promise(async (resolve) => {
+      const p = new Promise((resolve) => {
         let code
         if (videoElem.videoWidth && videoElem.videoHeight) {
           const imageData = this._createImageData(
@@ -209,13 +209,8 @@ export class QrcodeDecoder {
       ...this.defaultOption,
       ...options,
     }
-    try {
-      this.videoElem = videoElem
-      const code = await this._captureToCanvas(videoElem, opts)
-      return code
-    } catch (e) {
-      throw e
-    }
+    this.videoElem = videoElem
+    return this._captureToCanvas(videoElem, opts)
   }
 
   /**
@@ -253,7 +248,7 @@ export class QrcodeDecoder {
       imgDom = img
     }
 
-    let code = null
+    let code: CodeResult = null
     if (imgDom) {
       code = this._decodeFromImageElm(imgDom, opts)
     }

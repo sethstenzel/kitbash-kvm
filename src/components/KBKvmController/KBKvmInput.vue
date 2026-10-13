@@ -1,479 +1,721 @@
 <script lang="ts" setup>
-import {onBeforeUnmount, onMounted, Ref, ref, shallowRef, watch} from 'vue'
+import KbIcon from '@/components/KBKvmController/UI/KbIcon.vue'
+import {computed, onBeforeUnmount, ref, watch} from 'vue'
+import {useEventListener} from '@vueuse/core'
+import ActionDropdown from '@/components/KBKvmController/UI/ActionDropdown.vue'
 import {createPrompt} from '@/components/PromptInput/prompt-input'
-import {useEventListener, usePointerLock, useThrottleFn, useWindowFocus} from '@vueuse/core'
-import {ASCII_KEYS} from '@/components/KBKvmController/utils/keys-enum'
-import {useSerialState} from '@/components/KBKvmController/utils/serial-state'
 import {
+  ASCII_KEYS,
+  HID_CODES_BY_EVENT_CODE,
+  MODIFIER_BITS,
+} from '@/components/KBKvmController/utils/keys-enum'
+import {useSerialState, type ISerialPortLike} from '@/components/KBKvmController/utils/serial-state'
+import {
+  closeSerial,
+  onSerialClosed,
+  onSerialRelease,
+  openSerial,
+  writeSerial,
+} from '@/components/KBKvmController/utils/serial-io'
+import {
+  ABS_MAX,
+  absoluteMousePacket,
   CmdType,
-  decomposeHexToBytes,
   genPacket,
   i8clamp,
   indexToBinary,
+  KEYBOARD_RELEASE_PACKET,
+  keyboardPacket,
   MediaKey,
   mediaKeyMatrix,
+  relativeMousePacket,
 } from '@/components/KBKvmController/utils/ch9329'
+import {
+  cancelSend,
+  getEscapeMarkers,
+  isSending,
+  sendAdvancedText,
+  sendKeyCombo,
+  sendPastedText,
+  sendText,
+} from '@/components/KBKvmController/utils/send-text'
+import {
+  clientToVideoNormalized,
+  getVideoOrientation,
+  screenDeltaToVideo,
+} from '@/components/KBKvmController/utils/video-geometry'
 import {useSettingsStore} from '@/stores/settings'
-import {sleep} from '@/components/KBKvmController/utils'
-import {eventBus} from '@/utils/event-bus'
 
-const emit = defineEmits(['connected', 'disconnected'])
+const props = defineProps<{videoOnlyMode?: boolean}>()
+const emit = defineEmits(['connected', 'disconnected', 'menu-close', 'menu-open'])
 
 const settingsStore = useSettingsStore()
-const {reader, writer, serialPort} = useSerialState()
+const {serialPort} = useSerialState()
+const rootRef = ref<HTMLElement>()
 
-const writeSerial = (...args: any) => {
-  if (!writer.value) {
-    window.$notification({
-      type: 'error',
-      message: 'Serial port not initialized',
-      timeout: 3000,
-    })
-    return
-  }
-  // console.log(args)
-  return writer.value.write(...args)
-}
-
-// Loop to read serial port output
-async function readLoop(reader) {
-  while (true) {
-    try {
-      // Read data from serial port
-      const {value, done} = await reader.read()
-      if (done) {
-        // Reading finished
-        console.log('Stream closed')
-        break
-      }
-      // Process read data
-      console.log(value)
-    } catch (error) {
-      console.error('Read error: ', error)
-      break
-    }
-  }
-}
+/* ---------------- Serial connection ---------------- */
 
 const initSerial = async () => {
   if (serialPort.value) {
     return
   }
   try {
-    let port = null
-    if (navigator?.serial?.requestPort) {
+    let port: ISerialPortLike | null = null
+    if (navigator.serial?.requestPort) {
       port = await navigator.serial.requestPort()
-    } else if (navigator?.usb?.requestDevice) {
+    } else if (navigator.usb?.requestDevice) {
       // todo: using polyfill  `Failed to execute 'open' on 'USBDevice': Access denied.`
       const serialPolyfill = import('web-serial-polyfill')
       const device = await navigator.usb.requestDevice({filters: []})
-      // console.log(device)
-      port = new (await serialPolyfill).SerialPort(device, {
+      port = new (await serialPolyfill).SerialPort(device as any, {
         usbControlInterfaceClass: 255,
         usbTransferInterfaceClass: 255,
       })
     }
+    if (!port) {
+      throw new Error('Web Serial is not supported in this browser')
+    }
     const baudRate = settingsStore.baudRate || (await createPrompt('9600', 'baud rate')) || '9600'
     settingsStore.baudRate = baudRate
 
-    // Opening port
-    const opened = port.open({baudRate: +baudRate})
-    const timeout = new Promise((resolve, reject) => setTimeout(reject, 900))
-    await Promise.race([timeout, opened])
-    reader.value = await port.readable.getReader()
-    writer.value = await port.writable.getWriter()
-    serialPort.value = port
-    console.log(port)
+    await openSerial(port, +baudRate)
     emit('connected', port)
-
-    // readLoop(reader.value)
   } catch (error: any) {
+    // The user dismissed the port chooser
+    if (error?.name === 'NotFoundError') {
+      return
+    }
     console.error(error)
     window.$notification({
       type: 'warning',
-      message: error.message,
+      message: error?.message || String(error),
       timeout: 5000,
     })
   }
 }
-const closeSerial = () => {
-  if (reader.value) {
-    reader.value.releaseLock()
-    reader.value = null
-  }
-  if (writer.value) {
-    writer.value.releaseLock()
-    writer.value = null
-  }
-  if (serialPort.value) {
-    serialPort.value.close()
-    serialPort.value = null
-  }
-  releaseAbsoluteMouse()
+
+const disposeSerialRelease = onSerialRelease(() => releaseAllInput())
+const disposeSerialClosed = onSerialClosed(() => {
+  stopCapture()
   emit('disconnected')
-}
-onBeforeUnmount(() => {
-  // closeSerial()
-  // closeSerial()
-  // closeSerial()
 })
 
-const sendText = async (text: string | null) => {
-  if (!text) {
-    return
-  }
-  const errorChars = []
-  // switch to the ascii mode of ch9329 needs reconnect, which is unacceptable
-  for (const key of text) {
-    if (!ASCII_KEYS.has(key)) {
-      errorChars.push(key)
-      continue
-    }
-    const keyData = ASCII_KEYS.get(key)
-    if (!keyData) continue
-    const [hidCode, shift] = keyData
-    // console.log({key, hidCode, shift})
-    const value = new Uint8Array([
-      ...genPacket(CmdType.CMD_SEND_KB_GENERAL_DATA, shift ? 2 : 0, 0, hidCode, 0, 0, 0, 0, 0),
-      ...genPacket(CmdType.CMD_SEND_KB_GENERAL_DATA, 0, 0, 0, 0, 0, 0, 0, 0),
-    ])
-    await writeSerial(value)
-    await sleep(16)
-  }
+/* ---------------- Input state & release ---------------- */
 
-  if (errorChars.length) {
-    window.$notification({
-      type: 'error',
-      message: `[${errorChars.join(', ')}] send failed, only ASCII char is allowed.`,
-      timeout: 3000,
-    })
+const pressedModifiers = new Set<string>() // KeyboardEvent.code of held modifiers
+const pressedKeys: string[] = [] // KeyboardEvent.code of held non-modifier keys, in press order
+let lastControlLeftDown = -Infinity
+
+interface IRelativeState {
+  buttons: number
+  x: number
+  y: number
+  dirty: boolean
+  timer: ReturnType<typeof setTimeout> | null
+}
+let relativeState: IRelativeState | null = null
+let absButtons = 0
+let lastAbsPosition: {x: number; y: number} | null = null
+
+const modifierByte = () => {
+  let bits = 0
+  pressedModifiers.forEach((code) => (bits |= MODIFIER_BITS[code]))
+  return bits
+}
+const pressedHidCodes = () => pressedKeys.map((code) => HID_CODES_BY_EVENT_CODE[code])
+const sendKeyboardState = () => writeSerial(keyboardPacket(modifierByte(), pressedHidCodes()))
+
+/** Release all keys and mouse buttons on the target */
+const releaseAllInput = () => {
+  stopEscHold()
+  pressedModifiers.clear()
+  pressedKeys.length = 0
+  absButtons = 0
+  if (relativeState) {
+    Object.assign(relativeState, {buttons: 0, x: 0, y: 0, dirty: false})
+  }
+  const packets = [...KEYBOARD_RELEASE_PACKET, ...relativeMousePacket(0)]
+  if (lastAbsPosition) {
+    packets.push(...absoluteMousePacket(0, lastAbsPosition.x, lastAbsPosition.y))
+  }
+  return writeSerial(packets)
+}
+
+/* ---------------- Keyboard ---------------- */
+
+const ESC_HOLD_MS = 1000
+const PASTE_EVENT_WAIT_MS = 150
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform)
+// Set by holding Esc; keyboard forwarding resumes when capture is re-enabled
+let keyboardReleased = false
+let escHoldTimer: ReturnType<typeof setTimeout> | null = null
+
+const stopEscHold = () => {
+  if (escHoldTimer) {
+    clearTimeout(escHoldTimer)
+    escHoldTimer = null
   }
 }
 
-const sendAdvancedText = async (text: string | null) => {
-  if (!text) {
-    return
-  }
+const isForwardingKeyboard = () => !!serialPort.value && !props.videoOnlyMode && !keyboardReleased
 
-  // Parse text for command markers: |||COMMAND|||
-  const commandRegex = /\|\|\|(.+?)\|\|\|/g
-  let lastIndex = 0
-  let match: RegExpExecArray | null
+let pasteWaiter: ((text: string | null) => void) | null = null
 
-  while ((match = commandRegex.exec(text)) !== null) {
-    // Send regular text before the command
-    const textBefore = text.substring(lastIndex, match.index)
-    if (textBefore) {
-      await sendText(textBefore)
-    }
-
-    // Parse and send the command
-    const command = match[1].trim().toUpperCase()
-    await sendCommandKey(command)
-
-    lastIndex = commandRegex.lastIndex
-  }
-
-  // Send any remaining text after the last command
-  const remainingText = text.substring(lastIndex)
-  if (remainingText) {
-    await sendText(remainingText)
-  }
-}
-
-const sendCommandKey = async (command: string) => {
-  // Parse modifier keys and the main key
-  // Format: CTRL+C, ALT+F4, ENTER, etc.
-  const parts = command.split('+').map(p => p.trim())
-
-  let controlBits = 0
-  let mainKey = ''
-  let hidCode = 0
-
-  for (const part of parts) {
-    if (part === 'CTRL' || part === 'CONTROL') {
-      controlBits |= 0b00000001 // Ctrl
-    } else if (part === 'SHIFT') {
-      controlBits |= 0b00000010 // Shift
-    } else if (part === 'ALT') {
-      controlBits |= 0b00000100 // Alt
-    } else if (part === 'META' || part === 'WIN' || part === 'CMD') {
-      controlBits |= 0b00001000 // Meta/Windows/Command
-    } else {
-      mainKey = part
-    }
-  }
-
-  // Map key names to HID codes
-  const keyMap = {
-    'ENTER': 0x28,
-    'ESCAPE': 0x29,
-    'ESC': 0x29,
-    'BACKSPACE': 0x2a,
-    'TAB': 0x2b,
-    'SPACE': 0x2c,
-    'CAPSLOCK': 0x39,
-    'F1': 0x3a,
-    'F2': 0x3b,
-    'F3': 0x3c,
-    'F4': 0x3d,
-    'F5': 0x3e,
-    'F6': 0x3f,
-    'F7': 0x40,
-    'F8': 0x41,
-    'F9': 0x42,
-    'F10': 0x43,
-    'F11': 0x44,
-    'F12': 0x45,
-    'SCROLLLOCK': 0x47,
-    'PAUSE': 0x48,
-    'INSERT': 0x49,
-    'HOME': 0x4a,
-    'PAGEUP': 0x4b,
-    'DELETE': 0x4c,
-    'DEL': 0x4c,
-    'END': 0x4d,
-    'PAGEDOWN': 0x4e,
-    'RIGHT': 0x4f,
-    'ARROWRIGHT': 0x4f,
-    'LEFT': 0x50,
-    'ARROWLEFT': 0x50,
-    'DOWN': 0x51,
-    'ARROWDOWN': 0x51,
-    'UP': 0x52,
-    'ARROWUP': 0x52,
-    'NUMLOCK': 0x53,
-  }
-
-  // Check if it's a single character key
-  if (mainKey.length === 1) {
-    const upperKey = mainKey.toUpperCase()
-    if (ASCII_KEYS.has(upperKey)) {
-      const keyData = ASCII_KEYS.get(upperKey)
-      if (keyData) {
-        hidCode = keyData[0] as number
+/** Clipboard text from the 'paste' event the shortcut triggers, else the async clipboard API */
+const readClipboardText = () =>
+  new Promise<string | null>((resolve) => {
+    const timer = setTimeout(async () => {
+      pasteWaiter = null
+      try {
+        resolve((await navigator.clipboard.readText()) || null)
+      } catch {
+        resolve(null)
       }
-    } else if (ASCII_KEYS.has(mainKey.toLowerCase())) {
-      const keyData = ASCII_KEYS.get(mainKey.toLowerCase())
-      if (keyData) {
-        hidCode = keyData[0] as number
-      }
+    }, PASTE_EVENT_WAIT_MS)
+    pasteWaiter = (text) => {
+      clearTimeout(timer)
+      pasteWaiter = null
+      resolve(text)
     }
-  } else if (keyMap[mainKey]) {
-    hidCode = keyMap[mainKey]
-  }
+  })
 
-  if (hidCode === 0) {
-    window.$notification({
-      type: 'warning',
-      message: `Unknown key command: ${command}`,
-      timeout: 3000,
-    })
-    return
-  }
+useEventListener(
+  document,
+  'paste',
+  (event: ClipboardEvent) => {
+    if (!pasteWaiter) {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    pasteWaiter(event.clipboardData?.getData('text/plain') || null)
+  },
+  {capture: true},
+)
 
-  // Send key press
-  const value = new Uint8Array([
-    ...genPacket(CmdType.CMD_SEND_KB_GENERAL_DATA, controlBits, 0, hidCode, 0, 0, 0, 0, 0),
-    ...genPacket(CmdType.CMD_SEND_KB_GENERAL_DATA, 0, 0, 0, 0, 0, 0, 0, 0),
-  ])
-  await writeSerial(value)
-  await sleep(16)
-}
+const isPasteShortcut = (event: KeyboardEvent) =>
+  settingsStore.pasteInterceptCtrlV !== false &&
+  event.code === 'KeyV' &&
+  (event.ctrlKey || event.metaKey) &&
+  !event.altKey &&
+  !event.shiftKey
 
-const rootRef = ref()
+/** Ctrl/Cmd+V: type the local clipboard on the target; forward a real Ctrl+V if it holds no text */
+const handlePasteShortcut = async () => {
+  // The modifier may already be down on the target; release it so typed text isn't Ctrl+chars
+  const modifiers = modifierByte() || 0x01
+  pressedModifiers.clear()
+  pressedKeys.length = 0
+  void writeSerial(KEYBOARD_RELEASE_PACKET)
 
-// https://developer.mozilla.org/en-US/docs/Web/API/Element/requestPointerLock
-const {isSupported, lock, unlock, element, triggerElement} = usePointerLock(rootRef, {
-  unadjustedMovement: true,
-})
-
-const handleRelativeMouseWheel = async (event: WheelEvent) => {
-  event.preventDefault() // Prevent default zoom behavior
-  // event.deltaY represents scroll distance
-  let value
-  if (event.deltaY > 0) {
-    // console.log('Scroll down', event.deltaY)
-    value = new Uint8Array(genPacket(CmdType.CMD_SEND_MS_REL_DATA, 1, 0, 0, 0, 0xfd))
+  const text = await readClipboardText()
+  if (text) {
+    void sendPastedText(text)
   } else {
-    // console.log('Scroll up', event.deltaY)
-
-    value = new Uint8Array(genPacket(CmdType.CMD_SEND_MS_REL_DATA, 1, 0, 0, 0, 0x02))
+    void sendKeyCombo(modifiers, HID_CODES_BY_EVENT_CODE.KeyV)
   }
-  await writeSerial(value)
 }
 
-// Mouse lock, relative mouse mode
-useEventListener(document, 'pointerlockchange', (event) => {
-  if (!document.pointerLockElement) {
-    console.log('Exit pointer lock')
-    const el = rootRef.value
-    el.onmousemove = el.onmousedown = el.onmouseup = null
-    document.removeEventListener('wheel', handleRelativeMouseWheel)
+const releaseCapture = () => {
+  keyboardReleased = true
+  releaseAllInput()
+  stopCapture()
+  emit('menu-open')
+  window.$notification({
+    type: 'info',
+    message: 'Keyboard & mouse released. Click the video to capture again.',
+    timeout: 3000,
+  })
+}
 
+// Re-sync modifiers with the event's flags. Covers keyups the browser never delivered and a
+// modifier still physically held after the Ctrl+V paste released it, without undoing the AltGr fix.
+const syncModifiers = (event: KeyboardEvent) => {
+  const isAltGr =
+    pressedModifiers.has('AltRight') &&
+    !pressedModifiers.has('ControlLeft') &&
+    !pressedModifiers.has('ControlRight')
+  const pairs: Array<[boolean, string, string]> = [
+    [event.ctrlKey && !isAltGr, 'ControlLeft', 'ControlRight'],
+    [event.shiftKey, 'ShiftLeft', 'ShiftRight'],
+    [event.altKey, 'AltLeft', 'AltRight'],
+    [event.metaKey, 'MetaLeft', 'MetaRight'],
+  ]
+  for (const [isDown, left, right] of pairs) {
+    if (!isDown) {
+      pressedModifiers.delete(left)
+      pressedModifiers.delete(right)
+    } else if (!pressedModifiers.has(left) && !pressedModifiers.has(right)) {
+      pressedModifiers.add(left)
+    }
+  }
+}
+
+/** Press and release a key immediately, keeping the currently held keys */
+const tapKey = (code: string) =>
+  writeSerial([
+    ...keyboardPacket(modifierByte(), [...pressedHidCodes(), HID_CODES_BY_EVENT_CODE[code]].slice(-6)),
+    ...keyboardPacket(modifierByte(), pressedHidCodes()),
+  ])
+
+const handleKeydown = (event: KeyboardEvent) => {
+  if (!isForwardingKeyboard() || event.isComposing || event.keyCode === 229) {
     return
   }
-  console.log('Enter pointer lock', event, document.pointerLockElement)
+  emit('menu-close')
+  // The target OS does its own key repeat, except for keys we only ever tap
+  if (event.repeat) {
+    event.preventDefault()
+    const isTapped =
+      event.code !== 'Escape' &&
+      settingsStore.keyboardCompatibleMode &&
+      !MODIFIER_BITS[event.code] &&
+      HID_CODES_BY_EVENT_CODE[event.code] !== undefined
+    if (isTapped) {
+      void tapKey(event.code)
+    }
+    return
+  }
+  // Not prevented, so the browser fires the 'paste' event
+  if (isPasteShortcut(event)) {
+    void handlePasteShortcut()
+    return
+  }
+  event.preventDefault()
+
+  const code = event.code
+  if (code === 'Escape') {
+    stopEscHold()
+    escHoldTimer = setTimeout(() => {
+      escHoldTimer = null
+      releaseCapture()
+    }, ESC_HOLD_MS)
+    // Tapped, so holding Esc to release capture doesn't auto-repeat Esc on the target
+    syncModifiers(event)
+    void tapKey(code)
+    return
+  }
+
+  const isModifier = !!MODIFIER_BITS[code]
+  if (!isModifier) {
+    syncModifiers(event)
+  }
+  if (isModifier) {
+    if (code === 'ControlLeft') {
+      lastControlLeftDown = event.timeStamp
+    } else if (code === 'AltRight' && event.timeStamp - lastControlLeftDown < 10) {
+      // Windows AltGr arrives as a synthetic ControlLeft immediately followed by AltRight
+      pressedModifiers.delete('ControlLeft')
+    }
+    pressedModifiers.add(code)
+  } else if (HID_CODES_BY_EVENT_CODE[code] !== undefined) {
+    if (!pressedKeys.includes(code)) {
+      pressedKeys.push(code)
+    }
+  } else {
+    return
+  }
+  void sendKeyboardState()
+
+  // Compatible mode: keys are tapped (pressed and released at once) instead of held
+  if (settingsStore.keyboardCompatibleMode && !isModifier) {
+    pressedKeys.splice(pressedKeys.indexOf(code), 1)
+    void sendKeyboardState()
+  }
+}
+
+const handleKeyup = (event: KeyboardEvent) => {
+  const code = event.code
+  if (code === 'Escape') {
+    stopEscHold()
+  }
+  if (!isForwardingKeyboard()) {
+    return
+  }
+
+  let changed = false
+  if (MODIFIER_BITS[code]) {
+    changed = pressedModifiers.delete(code)
+    // macOS doesn't deliver keyups for keys released while Cmd is held
+    if (isMac && (code.startsWith('Meta') || code.startsWith('OS')) && pressedKeys.length) {
+      pressedKeys.length = 0
+      changed = true
+    }
+  } else {
+    const index = pressedKeys.indexOf(code)
+    if (index >= 0) {
+      pressedKeys.splice(index, 1)
+      changed = true
+    } else if (code === 'PrintScreen') {
+      // Windows only delivers the keyup for PrintScreen: send a full tap
+      event.preventDefault()
+      void writeSerial([
+        ...keyboardPacket(modifierByte(), [...pressedHidCodes(), HID_CODES_BY_EVENT_CODE.PrintScreen]),
+        ...keyboardPacket(modifierByte(), pressedHidCodes()),
+      ])
+      return
+    }
+  }
+  if (changed) {
+    event.preventDefault()
+    void sendKeyboardState()
+  }
+}
+
+useEventListener(document, 'keydown', handleKeydown)
+useEventListener(document, 'keyup', handleKeyup)
+useEventListener(window, 'blur', () => releaseAllInput())
+useEventListener(document, 'visibilitychange', () => {
+  if (document.hidden) {
+    releaseAllInput()
+  }
+})
+
+// In fullscreen, Keyboard Lock lets Ctrl+W/T/N, Alt+Tab etc. reach the target
+const syncKeyboardLock = () => {
+  const keyboard = navigator.keyboard
+  if (!keyboard) {
+    return
+  }
+  if (document.fullscreenElement && serialPort.value) {
+    keyboard.lock().catch((error) => console.warn('Keyboard lock failed:', error))
+  } else {
+    keyboard.unlock()
+  }
+}
+useEventListener(document, 'fullscreenchange', syncKeyboardLock)
+watch(serialPort, syncKeyboardLock)
+
+/* ---------------- Mouse: shared ---------------- */
+
+const WHEEL_NOTCH_PX = 100
+let wheelRemainder = 0
+
+/** Accumulate wheel deltas into notches; positive = scroll up (CH9329 convention) */
+const wheelToNotches = (event: WheelEvent) => {
+  const scale =
+    event.deltaMode === WheelEvent.DOM_DELTA_LINE
+      ? 33
+      : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+        ? 800
+        : 1
+  const px = event.deltaY * scale
+  if (!px) {
+    return 0
+  }
+  if (Math.sign(px) !== Math.sign(wheelRemainder)) {
+    wheelRemainder = 0
+  }
+  wheelRemainder += px
+  const notches = Math.trunc(wheelRemainder / WHEEL_NOTCH_PX)
+  wheelRemainder -= notches * WHEEL_NOTCH_PX
+  return -notches
+}
+
+/* ---------------- Mouse: relative (pointer lock) ---------------- */
+
+const pointerLocked = ref(false)
+let relativeAbort: AbortController | null = null
+
+const lockPointer = async (el?: HTMLElement) => {
+  if (!el || document.pointerLockElement === el) {
+    return
+  }
+  try {
+    await el.requestPointerLock({unadjustedMovement: true})
+  } catch {
+    // unadjustedMovement isn't supported everywhere
+    try {
+      await el.requestPointerLock()
+    } catch (error) {
+      console.warn('Pointer lock failed:', error)
+    }
+  }
+}
+
+const unlockPointer = () => {
+  if (rootRef.value && document.pointerLockElement === rootRef.value) {
+    document.exitPointerLock()
+  }
+}
+
+const bindRelativeMouse = (el: HTMLElement) => {
+  relativeAbort?.abort()
+  const abort = new AbortController()
+  relativeAbort = abort
+  const state: IRelativeState = {buttons: 0, x: 0, y: 0, dirty: false, timer: null}
+  relativeState = state
+
+  const flush = () => {
+    let x = Math.round(state.x)
+    let y = Math.round(state.y)
+    state.x -= x
+    state.y -= y
+    const packets: number[] = []
+    // do-while so button changes go out even without movement
+    do {
+      const dx = i8clamp(x)
+      const dy = i8clamp(y)
+      x -= dx
+      y -= dy
+      packets.push(...relativeMousePacket(state.buttons, dx, dy))
+    } while (x !== 0 || y !== 0)
+    void writeSerial(packets)
+  }
+  // 16ms throttle; movement accumulated meanwhile is flushed when the window ends
+  const tick = () => {
+    state.timer = null
+    if (state.dirty) {
+      state.dirty = false
+      flush()
+      state.timer = setTimeout(tick, 16)
+    }
+  }
+  const onMouse = (event: MouseEvent) => {
+    emit('menu-close')
+    const delta = screenDeltaToVideo(
+      event.movementX,
+      event.movementY,
+      getVideoOrientation(settingsStore),
+    )
+    state.x += delta.x
+    state.y += delta.y
+    const buttons = event.buttons & 0x07
+    if (buttons !== state.buttons) {
+      state.buttons = buttons
+      if (state.timer) {
+        clearTimeout(state.timer)
+        state.timer = null
+      }
+    }
+    if (state.timer) {
+      state.dirty = true
+      return
+    }
+    state.dirty = false
+    flush()
+    state.timer = setTimeout(tick, 16)
+  }
+  const onWheel = (event: WheelEvent) => {
+    event.preventDefault()
+    const notches = wheelToNotches(event)
+    if (notches) {
+      void writeSerial(relativeMousePacket(state.buttons, 0, 0, notches))
+    }
+  }
+
+  const {signal} = abort
+  el.addEventListener('mousemove', onMouse, {signal})
+  el.addEventListener('mousedown', onMouse, {signal})
+  el.addEventListener('mouseup', onMouse, {signal})
+  el.addEventListener('wheel', onWheel, {passive: false, signal})
+  signal.addEventListener('abort', () => {
+    if (state.timer) clearTimeout(state.timer)
+    if (relativeState === state) relativeState = null
+  })
+}
+
+useEventListener(document, 'pointerlockchange', () => {
   const el = rootRef.value
-
-  let [pressedBits, x, y] = [0, 0, 0]
-  let timer: any = null // a modified throttle strategy
-
-  document.addEventListener('wheel', handleRelativeMouseWheel, {passive: false})
-  el.onmousemove =
-    el.onmousedown =
-    el.onmouseup =
-      (event: MouseEvent) => {
-        /*        const pressedBits = event.buttons // so lucky, coincidence or necessity?
-        const x = Math.round(event.movementX)
-        const y = Math.round(event.movementY)
-
-        let [pX, pY] = [i8clamp(x), i8clamp(y)]
-        if (pX < 0) pX = (0xff + pX) & 0xff
-        if (pY < 0) pY = (0xff + pY) & 0xff
-        writeSerial(
-          new Uint8Array(genPacket(CmdType.CMD_SEND_MS_REL_DATA, 0x01, pressedBits, pX, pY, 0)),
-        )*/
-
-        x += event.movementX
-        y += event.movementY
-        if (pressedBits != event.buttons || i8clamp(x) !== x || i8clamp(y) !== y) {
-          clearTimeout(timer)
-          timer = null // force trigger
-        }
-        pressedBits = event.buttons // so lucky, coincidence or necessity?
-        if (timer !== null) return
-        x = Math.round(x)
-        y = Math.round(y)
-        const value: any = []
-        do {
-          let [pX, pY] = [i8clamp(x), i8clamp(y)]
-          x -= pX
-          y -= pY
-          if (pX < 0) pX = (0xff + pX) & 0xff
-          if (pY < 0) pY = (0xff + pY) & 0xff
-          // console.log({pressedBits, pX, pY})
-          value.push(...genPacket(CmdType.CMD_SEND_MS_REL_DATA, 0x01, pressedBits, pX, pY, 0))
-        } while (
-          x !== 0 ||
-          y !== 0 // use "do while" loop to send mousedown/mouseup immediately
-        )
-        x = 0
-        y = 0
-        writer.value.write(new Uint8Array(value)) // without await on purpose
-        timer = setTimeout(() => (timer = null), 16)
-      }
-})
-
-// Absolute mouse mode
-const absMouseRef = ref()
-const releaseAbsoluteMouse = () => {
-  const absEl = absMouseRef.value
-  absMouseRef.value = null
-  if (!absEl) {
+  if (el && document.pointerLockElement === el) {
+    if (props.videoOnlyMode) return
+    pointerLocked.value = true
+    bindRelativeMouse(el)
     return
   }
-  absEl.oncontextmenu = absEl.ondblclick = null
-  absEl.onmousemove = absEl.onmousedown = absEl.onmouseup = null
-  document.removeEventListener('wheel', handleRelativeMouseWheel)
-}
-onBeforeUnmount(() => {
-  handleKeyup()
-  releaseAbsoluteMouse()
+  if (pointerLocked.value) {
+    pointerLocked.value = false
+    relativeAbort?.abort()
+    relativeAbort = null
+    releaseAllInput()
+    emit('menu-open')
+  }
 })
-const bindAbsoluteMouse = (absEl) => {
-  absMouseRef.value = absEl
 
-  document.addEventListener('wheel', handleRelativeMouseWheel, {passive: false})
-  absEl.oncontextmenu = (e) => e.preventDefault()
-  absEl.ondblclick = (e) => {
-    e.preventDefault()
-    e.stopPropagation()
+/* ---------------- Mouse: absolute ---------------- */
+
+const absMouseRef = ref<HTMLElement | null>(null)
+let absoluteAbort: AbortController | null = null
+
+const releaseAbsoluteMouse = () => {
+  absoluteAbort?.abort()
+  absoluteAbort = null
+  absMouseRef.value = null
+}
+
+const areaFraction = (percent: unknown) => {
+  const n = Number(percent)
+  return n > 0 && n <= 100 ? n / 100 : 1
+}
+
+/** Client point -> CH9329 absolute coordinates, honoring rotation, mirroring, object-fit and the calibrated area */
+const toAbsolute = (absEl: HTMLElement, clientX: number, clientY: number) => {
+  const video = (absEl.closest('.video-wrapper')?.querySelector('video') ??
+    document.getElementById('streamVideo')) as HTMLVideoElement | null
+  const frame = video ? clientToVideoNormalized(video, clientX, clientY) : null
+  let u: number
+  let v: number
+  if (frame) {
+    const aw = areaFraction(settingsStore.absMouseAreaWidth)
+    const ah = areaFraction(settingsStore.absMouseAreaHeight)
+    u = (frame.x - (1 - aw) / 2) / aw
+    v = (frame.y - (1 - ah) / 2) / ah
+  } else {
+    // No video dimensions yet; nothing to map onto while hidden either
+    const rect = absEl.getBoundingClientRect()
+    if (!rect.width || !rect.height) {
+      return null
+    }
+    u = (clientX - rect.left) / rect.width
+    v = (clientY - rect.top) / rect.height
+  }
+  const clamp01 = (n: number) => Math.min(1, Math.max(0, n))
+  return {x: Math.round(clamp01(u) * ABS_MAX), y: Math.round(clamp01(v) * ABS_MAX)}
+}
+
+const bindAbsoluteMouse = (absEl: HTMLElement) => {
+  if (props.videoOnlyMode) return
+  releaseAbsoluteMouse()
+  absMouseRef.value = absEl
+  const abort = new AbortController()
+  absoluteAbort = abort
+  const {signal} = abort
+  absButtons = 0
+
+  const writeAbsolute = (x: number, y: number, wheel = 0) => {
+    lastAbsPosition = {x, y}
+    void writeSerial(absoluteMousePacket(absButtons, x, y, wheel))
+  }
+  // Leading + trailing throttle for moves. The pending move is dropped whenever a button change
+  // is sent, otherwise it would fire afterwards with the old button state and undo the press.
+  let pendingMove: {x: number; y: number} | null = null
+  let moveTimer: ReturnType<typeof setTimeout> | null = null
+  const writeThrottled = (pos: {x: number; y: number}) => {
+    if (moveTimer) {
+      pendingMove = pos
+      return
+    }
+    writeAbsolute(pos.x, pos.y)
+    moveTimer = setTimeout(() => {
+      moveTimer = null
+      if (pendingMove) {
+        const next = pendingMove
+        pendingMove = null
+        writeThrottled(next)
+      }
+    }, 16)
   }
 
-  const writeSerialThrottled = useThrottleFn(
-    ({pressedBits, x, y}) => {
-      writeSerial(
-        new Uint8Array(
-          genPacket(
-            CmdType.CMD_SEND_MS_ABS_DATA,
-            0x02,
-            pressedBits,
-            ...decomposeHexToBytes(x),
-            ...decomposeHexToBytes(y),
-            0,
-          ),
-        ),
-      )
-    },
-    16,
-    true,
-  )
+  // While a button is held, follow the pointer outside the area so the release isn't lost
+  let dragAbort: AbortController | null = null
+  const syncDragTracking = () => {
+    if (absButtons && !dragAbort) {
+      dragAbort = new AbortController()
+      window.addEventListener('mousemove', onWindowMouse, {signal: dragAbort.signal})
+      window.addEventListener('mouseup', onWindowMouse, {signal: dragAbort.signal})
+    } else if (!absButtons && dragAbort) {
+      dragAbort.abort()
+      dragAbort = null
+    }
+  }
 
-  absEl.onmousemove =
-    absEl.onmousedown =
-    absEl.onmouseup =
-      (event: MouseEvent) => {
-        event.preventDefault()
-        event.stopPropagation()
-
-        let pressedBits = event.buttons
-
-        // TODO: optimize,
-        const rect = absEl.getBoundingClientRect()
-        const screenWidth = rect.width
-        const screenHeight = rect.height
-
-        // Calculate mouse coordinates relative to element top-left
-        let offsetX = event.clientX - rect.left
-        let offsetY = event.clientY - rect.top
-        // if (settingsStore.filterMirrorY) {
-        //   offsetX = rect.width - offsetX
-        // }
-        // if (settingsStore.filterMirrorX) {
-        //   offsetY = rect.height - offsetY
-        // }
-
-        // Calculate new position
-        let x = Math.floor((offsetX * 4096) / screenWidth)
-        let y = Math.floor((offsetY * 4096) / screenHeight)
-        // console.log({
-        //   event,
-        //   offsetX,
-        //   offsetY,
-        //   screenWidth,
-        //   screenHeight,
-        //   x,
-        //   y,
-        // })
-
-        // 9600 baud rate causes slow mouse movement when browser console is open, throttling required
-        writeSerialThrottled({
-          pressedBits,
-          x,
-          y,
-        })
+  // Reused while the video is hidden (stream restart), so button releases still go out
+  let lastPos: {x: number; y: number} | null = null
+  const handleMouse = (event: MouseEvent) => {
+    emit('menu-close')
+    const pos = toAbsolute(absEl, event.clientX, event.clientY) ?? lastPos
+    if (!pos) {
+      return
+    }
+    lastPos = pos
+    const buttons = event.buttons & 0x07
+    // Button changes go out immediately: the trailing throttle keeps only the last call
+    // per window, so a fast down+up (e.g. touchpad tap) would otherwise lose the press
+    if (event.type !== 'mousemove' || buttons !== absButtons) {
+      absButtons = buttons
+      pendingMove = null
+      writeAbsolute(pos.x, pos.y)
+      syncDragTracking()
+      return
+    }
+    // 9600 baud can't keep up with every mousemove
+    writeThrottled(pos)
+  }
+  const onAreaMouse = (event: MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    handleMouse(event)
+  }
+  function onWindowMouse(event: MouseEvent) {
+    if (absEl.contains(event.target as Node)) return
+    if (!absButtons) {
+      syncDragTracking()
+      return
+    }
+    handleMouse(event)
+  }
+  const onWheel = (event: WheelEvent) => {
+    event.preventDefault()
+    const notches = wheelToNotches(event)
+    if (notches) {
+      const pos = toAbsolute(absEl, event.clientX, event.clientY) ?? lastPos
+      if (!pos) {
+        return
       }
+      pendingMove = null
+      writeAbsolute(pos.x, pos.y, notches)
+    }
+  }
+
+  absEl.addEventListener('mousemove', onAreaMouse, {signal})
+  absEl.addEventListener('mousedown', onAreaMouse, {signal})
+  absEl.addEventListener('mouseup', onAreaMouse, {signal})
+  absEl.addEventListener('wheel', onWheel, {passive: false, signal})
+  absEl.addEventListener('contextmenu', (e) => e.preventDefault(), {signal})
+  absEl.addEventListener(
+    'dblclick',
+    (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+    },
+    {signal},
+  )
+  signal.addEventListener('abort', () => {
+    dragAbort?.abort()
+    if (moveTimer) clearTimeout(moveTimer)
+  })
 }
+
+/* ---------------- Capture lifecycle ---------------- */
+
+/** Stop forwarding the mouse (pointer lock / absolute area); no serial writes */
+const stopCapture = () => {
+  stopEscHold()
+  unlockPointer()
+  relativeAbort?.abort()
+  relativeAbort = null
+  pointerLocked.value = false
+  releaseAbsoluteMouse()
+}
+
 watch(
   () => settingsStore.cursorMode,
   (mode) => {
     if (mode === 'relative') {
       releaseAbsoluteMouse()
-      return
+    } else {
+      unlockPointer()
     }
   },
   {immediate: true},
 )
 
-// Watch for baud rate changes and disconnect serial connection
+// Changing the baud rate requires reopening the port
 watch(
   () => settingsStore.baudRate,
   (newBaudRate, oldBaudRate) => {
-    // Only disconnect if baud rate actually changed and there's an active connection
     if (oldBaudRate !== undefined && newBaudRate !== oldBaudRate && serialPort.value) {
-      console.log(`Baud rate changed from ${oldBaudRate} to ${newBaudRate}, disconnecting serial...`)
-      closeSerial()
+      void closeSerial()
       window.$notification({
         type: 'info',
         message: `Baud rate changed to ${newBaudRate}. Serial connection closed.`,
@@ -483,133 +725,89 @@ watch(
   },
 )
 
+onBeforeUnmount(() => {
+  releaseAllInput()
+  stopCapture()
+  navigator.keyboard?.unlock()
+  disposeSerialRelease()
+  disposeSerialClosed()
+})
+
+let captureHintShown = false
+
+const autoEnable = (el?: HTMLElement) => {
+  if (!serialPort.value) {
+    initSerial()
+    return
+  }
+  keyboardReleased = false
+  if (!captureHintShown) {
+    captureHintShown = true
+    window.$notification({
+      type: 'info',
+      message: 'Hold Esc to release keyboard & mouse',
+      timeout: 4000,
+    })
+  }
+
+  if (settingsStore.cursorMode === 'relative') {
+    lockPointer(rootRef.value)
+  } else if (el && !absMouseRef.value) {
+    bindAbsoluteMouse(el)
+  }
+}
+
+// True when keyboard/mouse are already being forwarded to the target
+const isCaptured = () =>
+  !!serialPort.value &&
+  (settingsStore.cursorMode === 'relative' ? pointerLocked.value : !!absMouseRef.value)
+
+defineExpose({
+  autoEnable,
+  isCaptured,
+})
+
+/* ---------------- Toolbar actions ---------------- */
+
+const escapeMarkers = computed(() => getEscapeMarkers(settingsStore.advancedTextEscapeStyle))
+
 const showSendInput = async () => {
   const text = await createPrompt('', 'Send Text', {
     type: 'textarea',
+    contentStyle: {minWidth: '420px', maxWidth: '600px'},
     inputProps: {
       rows: 10,
       cols: 50,
     },
   })
-  sendText(text)
+  void sendText(text)
 }
 
 const showSendAdvancedInput = async () => {
+  const [open, close] = escapeMarkers.value
+  const c = (command: string) => `${open}${command}${close}`
   const text = await createPrompt('', 'Send Adv. Text (Command Key Support)', {
     type: 'textarea',
+    contentStyle: {minWidth: '420px', maxWidth: '600px'},
     inputProps: {
       rows: 10,
       cols: 50,
-      placeholder: 'Example: Hello, World!|||ENTER|||Username|||TAB|||Password|||ENTER|||\n\nSupported commands:\n- |||ENTER||| - Press Enter\n- |||CTRL+C||| - Press Ctrl+C\n- |||ALT+F4||| - Press Alt+F4\n- |||SHIFT+TAB||| - Press Shift+Tab\nAnd many more special keys...',
+      placeholder: [
+        `Example: ${c('WIN+M')}`,
+        `Example: Username${c('TAB')}Password${c('DELAY=1')}${c('ENTER')}`,
+        '',
+        'Supported commands:',
+        `- ${c('ENTER')} - Press Enter`,
+        `- ${c('CTRL+C')} - Press Ctrl+C`,
+        `- ${c('ALT+F4')} - Press Alt+F4`,
+        `- ${c('SHIFT+TAB')} - Press Shift+Tab`,
+        `- ${c('DELAY=2')} - Wait 2 seconds (supports decimals)`,
+        'And many more special keys...',
+      ].join('\n'),
     },
   })
-  sendAdvancedText(text)
+  void sendAdvancedText(text, settingsStore.advancedTextEscapeStyle)
 }
-
-// Macro execution
-const eatKeys = new Set() // avoid tailing control keys (press and release key A will emit event keyup[A] and keyup[Shift])
-
-const handleKeydown = async (event: KeyboardEvent) => {
-  if (!serialPort.value) {
-    return
-  }
-  event.preventDefault()
-
-  // console.log(event)
-  // Press Shift+Esc to unlock mouse
-  if (event.shiftKey && event.key === 'Escape') {
-    await unlock()
-    return
-  }
-
-  const isCompatibleMode = settingsStore.keyboardCompatibleMode
-
-  if (isCompatibleMode && eatKeys.has(event.key)) {
-    eatKeys.delete(event.key)
-    return
-  }
-
-  // Check if this is a modifier key pressed alone (Shift, Control, Alt, Meta)
-  const isModifierKey = ['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)
-
-  if (isModifierKey) {
-    // Send modifier-only packet when modifier keys are pressed
-    let controlBits = 0
-    if (event.shiftKey) {
-      controlBits |= 0b00000010
-      eatKeys.add('Shift')
-    }
-    if (event.ctrlKey) {
-      controlBits |= 0b00000001
-      eatKeys.add('Control')
-    }
-    if (event.altKey) {
-      controlBits |= 0b00000100
-      eatKeys.add('Alt')
-    }
-    if (event.metaKey) {
-      controlBits |= 0b00001000
-      eatKeys.add('Meta')
-    }
-
-    // Send modifier state with no key pressed (hidCode = 0)
-    await writeSerial(
-      new Uint8Array(genPacket(CmdType.CMD_SEND_KB_GENERAL_DATA, controlBits, 0, 0, 0, 0, 0, 0, 0))
-    )
-    return
-  }
-
-  const keyData = ASCII_KEYS.get(event.key)
-  if (!keyData) return
-  const [hidCode, shift] = keyData
-  let controlBits = 0
-  if (shift || event.shiftKey) {
-    controlBits |= 0b00000010
-    eatKeys.add('Shift')
-  }
-  if (event.ctrlKey) {
-    controlBits |= 0b00000001
-    eatKeys.add('Control')
-  }
-  if (event.altKey) {
-    controlBits |= 0b00000100
-    eatKeys.add('Alt')
-  }
-  if (event.metaKey) {
-    controlBits |= 0b00001000
-    eatKeys.add('Meta')
-  }
-
-  let arr = genPacket(CmdType.CMD_SEND_KB_GENERAL_DATA, controlBits, 0, hidCode, 0, 0, 0, 0, 0)
-  if (isCompatibleMode) {
-    arr = [...arr, ...genPacket(CmdType.CMD_SEND_KB_GENERAL_DATA, 0, 0, 0, 0, 0, 0, 0, 0)]
-  }
-
-  await writeSerial(new Uint8Array(arr))
-}
-
-const handleKeyup = async (event?: KeyboardEvent) => {
-  if (!serialPort.value) {
-    return
-  }
-  if (event) {
-    event.preventDefault()
-  }
-
-  // Normal mode, send key release
-  await writeSerial(
-    new Uint8Array([...genPacket(CmdType.CMD_SEND_KB_GENERAL_DATA, 0, 0, 0, 0, 0, 0, 0, 0)]),
-  )
-}
-useEventListener(document, 'keydown', handleKeydown)
-useEventListener(document, 'keyup', handleKeyup)
-
-const focused = useWindowFocus()
-watch(focused, (val) => {
-  if (!val) {
-    handleKeyup()
-  }
-})
 
 const selectedTransfer = ref('')
 const transferOptions = [
@@ -622,174 +820,47 @@ const transferOptions = [
   {
     value: 'send_text',
     label: 'Send Text...',
-    action() {
-      showSendInput()
-    },
+    action: showSendInput,
   },
   {
     value: 'send_advanced_text',
     label: 'Send Adv. Text (Command Key Support)...',
-    action() {
-      showSendAdvancedInput()
-    },
+    action: showSendAdvancedInput,
   },
-  // {
-  //   value: 'scan_qr',
-  //   label: 'Scan QR Code',
-  //   async action() {
-  //     eventBus.emit('scan_qr')
-  //   },
-  // },
-  // {
-  //   value: 'scan_qr_from_image',
-  //   label: 'Scan QR Code From Image...',
-  //   async action() {
-  //     eventBus.emit('scan_qr_from_image')
-  //   },
-  // },
 ]
 const handleTransferSelect = async () => {
   const item = transferOptions.find((i) => i.value === selectedTransfer.value)
-  if (!item) {
-    return
-  }
-  await item.action()
-
   selectedTransfer.value = ''
+  await item?.action?.()
 }
 
 const selectedComboKey = ref('')
-
-// Build special key options including macros
-import {computed} from 'vue'
-const specialKeyOptions = computed(() => {
-  const baseOptions = [
-    {value: '', label: 'Send Special Keys', disabled: true, hidden: true},
-    {
-      value: 'ctrl_alt_del',
-      label: 'Ctrl + Alt + Del',
-      values: {
-        key: 'Delete',
-        controlBits: 0b00000101,
-      },
-    },
-  {
-    value: 'alt_f4',
-    label: 'Alt + F4',
-    values: {
-      key: 'F4',
-      controlBits: 0b00000100,
-    },
-  },
-  {
-    value: 'shift_alt',
-    label: 'Shift + Alt',
-    values: {
-      controlBits: 0b00000110,
-    },
-  },
-  {
-    value: 'ctrl_space',
-    label: 'Ctrl + Space',
-    values: {
-      key: ' ',
-      controlBits: 0b00000001,
-    },
-  },
-  {
-    value: 'alt_space',
-    label: 'Alt + Space',
-    values: {
-      key: ' ',
-      controlBits: 0b00000100,
-    },
-  },
-  {
-    value: 'meta',
-    label: 'Meta',
-    values: {
-      controlBits: 0b00001000,
-    },
-  },
-  {
-    value: 'meta_tab',
-    label: 'Meta + Tab',
-    values: {
-      key: 'Tab',
-      controlBits: 0b00001000,
-    },
-  },
-  {
-    value: 'alt_tab',
-    label: 'Alt + Tab',
-    values: {
-      key: 'Tab',
-      controlBits: 0b00000100,
-    },
-  },
-  {
-    value: 'esc',
-    label: 'Esc',
-    values: {
-      key: 'Escape',
-    },
-  },
-  {
-    value: 'capslock',
-    label: 'Capslock',
-    values: {
-      key: 'Capslock',
-    },
-  },
-    {label: '-----------------', disabled: true},
-    {value: 'ctrl_alt_f1', label: 'Ctrl + Alt + F1'},
-    {value: 'ctrl_alt_f2', label: 'Ctrl + Alt + F2'},
-    {value: 'ctrl_alt_f3', label: 'Ctrl + Alt + F3'},
-    {value: 'ctrl_alt_f4', label: 'Ctrl + Alt + F4'},
-    {value: 'ctrl_alt_f5', label: 'Ctrl + Alt + F5'},
-    {value: 'ctrl_alt_f6', label: 'Ctrl + Alt + F6'},
-    {value: 'ctrl_alt_f7', label: 'Ctrl + Alt + F7'},
-    {value: 'ctrl_alt_f8', label: 'Ctrl + Alt + F8'},
-    {value: 'ctrl_alt_f9', label: 'Ctrl + Alt + F9'},
-  ]
-
-  return baseOptions
-})
-const handleSendComboKey = async () => {
-  const value = selectedComboKey.value
-  if (!value) {
+const specialKeyOptions = [
+  {value: '', label: 'Send Special Keys', disabled: true, hidden: true},
+  {value: 'ctrl_alt_del', label: 'Ctrl + Alt + Del', values: {key: 'Delete', controlBits: 0b00000101}},
+  {value: 'alt_f4', label: 'Alt + F4', values: {key: 'F4', controlBits: 0b00000100}},
+  {value: 'ctrl_space', label: 'Ctrl + Space', values: {key: ' ', controlBits: 0b00000001}},
+  {value: 'alt_space', label: 'Alt + Space', values: {key: ' ', controlBits: 0b00000100}},
+  {value: 'meta', label: 'Meta / Win', values: {controlBits: 0b00001000}},
+  {value: 'meta_tab', label: 'Meta / Win + Tab', values: {key: 'Tab', controlBits: 0b00001000}},
+  {value: 'alt_tab', label: 'Alt + Tab', values: {key: 'Tab', controlBits: 0b00000100}},
+  {value: 'esc', label: 'Esc', values: {key: 'Escape'}},
+  {value: 'capslock', label: 'Capslock', values: {key: 'CapsLock'}},
+  {label: '-----------------', disabled: true},
+  {value: 'f1', label: 'F1', values: {key: 'F1'}},
+  {value: 'f2', label: 'F2', values: {key: 'F2'}},
+  {value: 'f10', label: 'F10', values: {key: 'F10'}},
+  {value: 'f12', label: 'F12', values: {key: 'F12'}},
+  {value: 'delete', label: 'Delete', values: {key: 'Delete'}},
+]
+const handleSendComboKey = () => {
+  const item = specialKeyOptions.find((i) => i.value && i.value === selectedComboKey.value)
+  selectedComboKey.value = ''
+  if (!item?.values) {
     return
   }
-
-  let key: string = ''
-  let controlBits
-  let hidCode = 0
-
-  if (/^ctrl_alt_f\d+$/.test(value)) {
-    key = 'F' + value.slice(10)
-    controlBits = 0b00000101
-  } else {
-    const item = specialKeyOptions.value.find((i: any) => i.value === value)
-    if (!item) {
-      return
-    }
-    key = item.values?.key || ''
-    controlBits = item.values?.controlBits || 0
-  }
-  if (key) {
-    const keyData = ASCII_KEYS.get(key)
-    if (keyData) {
-      hidCode = keyData[0] as number
-    }
-  }
-
-  const sv = new Uint8Array([
-    ...genPacket(CmdType.CMD_SEND_KB_GENERAL_DATA, controlBits, 0, hidCode, 0, 0, 0, 0, 0),
-    ...genPacket(CmdType.CMD_SEND_KB_GENERAL_DATA, 0, 0, 0, 0, 0, 0, 0, 0),
-  ])
-  await writeSerial(sv)
-
-  selectedComboKey.value = ''
+  const hidCode = item.values.key ? (ASCII_KEYS.get(item.values.key)?.[0] ?? 0) : 0
+  void sendKeyCombo(item.values.controlBits ?? 0, hidCode)
 }
 
 const selectedMediaKey = ref('')
@@ -798,76 +869,53 @@ const mediaKeyACPIOptions = [
   {value: 0b00000010, label: 'Sleep'},
   {value: 0b00000001, label: 'Power'},
 ]
-const mediaKeyCommonGroups = computed(() => {
-  const groups: Array<{label: string; children: Array<{value: any; label: string}>}> = [
-    {
-      label: 'Media Control',
-      children: [
-        {value: MediaKey.MUTE, label: '🔇 Mute'},
-        {value: MediaKey.VOLUME_PLUS, label: '🔊 Volume Up'},
-        {value: MediaKey.VOLUME_MINUS, label: '🔉 Volume Down'},
-      ],
-    },
-  ]
-
-  return groups
-})
+const mediaKeyCommonGroups = [
+  {
+    label: 'Media Control',
+    children: [
+      {value: MediaKey.MUTE, label: '🔇 Mute'},
+      {value: MediaKey.VOLUME_PLUS, label: '🔊 Volume Up'},
+      {value: MediaKey.VOLUME_MINUS, label: '🔉 Volume Down'},
+    ],
+  },
+]
 
 const handleSendMedialKey = async () => {
   const value = selectedMediaKey.value
+  selectedMediaKey.value = ''
   if (!value) {
     return
   }
 
   const acpiItem = mediaKeyACPIOptions.find((i) => i.value === Number(value))
   if (acpiItem) {
-    // Send ACPI key
-    const sv = new Uint8Array([
-      ...genPacket(CmdType.CMD_SEND_KB_MEDIA_DATA, 0x01, value),
+    await writeSerial([
+      ...genPacket(CmdType.CMD_SEND_KB_MEDIA_DATA, 0x01, acpiItem.value),
       ...genPacket(CmdType.CMD_SEND_KB_MEDIA_DATA, 0x01, 0),
     ])
-    await writeSerial(sv)
-    selectedMediaKey.value = ''
     return
   }
 
-  // Send media key
-  const arr = [0, 0, 0]
-  for (let i = 0; i < mediaKeyMatrix.length; i++) {
-    for (let j = 0; j < mediaKeyMatrix[i].length; j++) {
-      const v = mediaKeyMatrix[i][j]
-      if (v === value) {
-        arr[i] = indexToBinary(j)
-        break
-      }
+  const bytes = [0, 0, 0]
+  mediaKeyMatrix.forEach((row, i) => {
+    const j = row.indexOf(value as MediaKey)
+    if (j >= 0) {
+      bytes[i] = indexToBinary(j)
     }
-  }
-
-  const sv = new Uint8Array([
-    ...genPacket(CmdType.CMD_SEND_KB_MEDIA_DATA, 0x02, ...arr),
+  })
+  await writeSerial([
+    ...genPacket(CmdType.CMD_SEND_KB_MEDIA_DATA, 0x02, ...bytes),
     ...genPacket(CmdType.CMD_SEND_KB_MEDIA_DATA, 0x02, 0, 0, 0),
   ])
-  await writeSerial(sv)
-
-  selectedMediaKey.value = ''
 }
 
-const autoEnable = (el) => {
-  if (!serialPort.value) {
-    initSerial()
-    return
-  }
-
-  if (settingsStore.cursorMode === 'relative') {
-    lock(rootRef.value)
-  } else if (el && !absMouseRef.value) {
-    bindAbsoluteMouse(el)
-  }
-}
-
-defineExpose({
-  autoEnable,
-})
+const mediaKeyOptions = (() => {
+  const flat: any[] = [{value: undefined, label: 'ACPI', group: true}, ...mediaKeyACPIOptions]
+  mediaKeyCommonGroups.forEach((g) => {
+    flat.push({value: undefined, label: g.label, group: true}, ...g.children)
+  })
+  return flat
+})()
 </script>
 
 <template>
@@ -878,72 +926,48 @@ defineExpose({
       class="btn-no-style blue"
       title="Connect Serial"
     >
-      <span class="mdi mdi-connection"></span>
+      <KbIcon name="serial-connect" />
     </button>
     <template v-else>
-      <button @click="closeSerial" class="btn-no-style orange" title="Close Serial">
-        <span class="mdi mdi-lan-disconnect"></span>
+      <button @click="closeSerial()" class="btn-no-style orange" title="Close Serial">
+        <KbIcon name="serial-disconnect" />
       </button>
-      <!--<button @click="lock(rootRef)" class="btn-no-style blue">Capture Mouse</button>-->
 
-      <label
-        class="select-label-wrapper"
+      <button
+        v-if="isSending"
+        @click="cancelSend"
+        class="btn-no-style stop-sending"
+        title="Stop sending text / macro"
+      >
+        <KbIcon name="stop" />
+      </button>
+
+      <ActionDropdown
+        icon="text-transfer"
         title="Text Transfer"
-        :class="{activated: selectedTransfer !== ''}"
-      >
-        <span class="mdi mdi-card-text"></span>
-        <select v-model="selectedTransfer" class="btn-no-style" @change="handleTransferSelect">
-          <option
-            v-for="item in transferOptions"
-            :disabled="item.disabled"
-            :hidden="item.hidden"
-            :key="item.value"
-            :value="item.value"
-          >
-            {{ item.label }}
-          </option>
-        </select>
-      </label>
+        placeholder="Send Text..."
+        :options="transferOptions"
+        v-model="selectedTransfer"
+        @change="handleTransferSelect"
+      />
 
-      <label
-        class="select-label-wrapper"
+      <ActionDropdown
+        icon="hotkeys"
         title="Send Common Hotkeys"
-        :class="{activated: selectedComboKey !== ''}"
-      >
-        <span class="mdi mdi-keyboard-close-outline"></span>
-        <select v-model="selectedComboKey" class="btn-no-style" @change="handleSendComboKey">
-          <option
-            v-for="item in specialKeyOptions"
-            :key="item.value"
-            :value="item.value"
-            :disabled="item.disabled"
-            :hidden="item.hidden"
-          >
-            {{ item.label }}
-          </option>
-        </select>
-      </label>
+        placeholder="Send Hotkey..."
+        :options="specialKeyOptions"
+        v-model="selectedComboKey"
+        @change="handleSendComboKey"
+      />
 
-      <label
-        class="select-label-wrapper"
-        title="Send Special Keys"
-        :class="{activated: selectedMediaKey !== ''}"
-      >
-        <span class="mdi mdi-keyboard-close"></span>
-        <select v-model="selectedMediaKey" class="btn-no-style" @change="handleSendMedialKey">
-          <option :value="''" disabled hidden>Select Media Keys</option>
-          <optgroup label="ACPI">
-            <option v-for="item in mediaKeyACPIOptions" :key="item.value" :value="item.value">
-              {{ item.label }}
-            </option>
-          </optgroup>
-          <optgroup v-for="group in mediaKeyCommonGroups" :key="group.label" :label="group.label">
-            <option v-for="item in group.children" :key="item.value" :value="item.value">
-              {{ item.label }}
-            </option>
-          </optgroup>
-        </select>
-      </label>
+      <ActionDropdown
+        icon="media-keys"
+        title="Send Media Keys"
+        placeholder="Send Media Key..."
+        :options="mediaKeyOptions"
+        v-model="selectedMediaKey"
+        @change="handleSendMedialKey"
+      />
     </template>
   </div>
 </template>
@@ -951,5 +975,9 @@ defineExpose({
 <style scoped lang="scss">
 .kvm-input {
   outline: none;
+}
+
+.stop-sending {
+  color: #f44336;
 }
 </style>

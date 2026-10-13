@@ -5,7 +5,8 @@ export default {
 </script>
 
 <script setup lang="ts">
-import {onMounted, ref, computed, shallowRef, onBeforeUnmount} from 'vue'
+import KbIcon from '@/components/KBKvmController/UI/KbIcon.vue'
+import {onMounted, ref, computed, onBeforeUnmount} from 'vue'
 import TauriActions from '@/components/KBKvmController/TauriActions.vue'
 import {useSettingsStore} from '@/stores/settings'
 import SettingsPrompt from '@/components/KBKvmController/SettingsPrompt.vue'
@@ -14,29 +15,34 @@ import QRScanner from '@/components/KBKvmController/QRScanner.vue'
 import OCRScanner from '@/components/KBKvmController/OCRScanner.vue'
 import MacrosMenu from '@/components/KBKvmController/MacrosMenu.vue'
 import {useActionBar} from '@/components/KBKvmController/hooks/use-action-bar'
-import DragButton from '@/components/KBKvmController/UI/DragButton.vue'
 
 // Import composables
 import {useMediaDevices} from './composables/useMediaDevices'
-import {useMediaStream} from './composables/useMediaStream'
+import {useMediaStream, type IStreamInfo} from './composables/useMediaStream'
 import {useCameraCapabilities} from './composables/useCameraCapabilities'
 import {useVideoRecording} from './composables/useVideoRecording'
 import {useScreenshot} from './composables/useScreenshot'
 import {useVideoFilters} from './composables/useVideoFilters'
 import {usePlayerUI} from './composables/usePlayerUI'
 import {isPromptVisible} from '@/components/PromptInput/prompt-input'
+import {eventBus} from '@/utils/event-bus'
+import {isTauri} from '@/utils'
+import {useSerialState} from '@/components/KBKvmController/utils/serial-state'
 
 const settingsStore = useSettingsStore()
+const {serialPort} = useSerialState()
 
 // Refs
-const isTauri = ref(!!window.__TAURI__)
 const videoRef = ref<HTMLVideoElement>()
-const rootRef = shallowRef<HTMLElement>()
+const mainGraphRef = ref<HTMLElement>()
 const kvmInputRef = ref()
 const absMouseRef = ref()
 
+// public/ asset; BASE_URL keeps it working when the app is served from a subpath
+const logoUrl = `${import.meta.env.BASE_URL}logo.png`
+
 // Graph info state
-const graphInfo = ref({
+const graphInfo = ref<IStreamInfo>({
   width: 100,
   height: 100,
   aspectRatio: 1,
@@ -50,6 +56,17 @@ const actionBarOffset = ref(0) // Horizontal offset in pixels
 const isDragging = ref(false)
 const dragStartX = ref(0)
 const dragStartOffset = ref(0)
+const actionBarWrapRef = ref<HTMLElement | null>(null)
+let rafId = 0
+let pendingOffset: number | null = null
+
+const applyActionBarOffset = (offset: number) => {
+  // Applied directly to the DOM element to avoid Vue reactivity overhead during drag
+  if (actionBarWrapRef.value) {
+    actionBarWrapRef.value.style.transform = `translateX(${offset}px)`
+  }
+  actionBarOffset.value = offset
+}
 
 const handleActionBarMouseDown = (event: MouseEvent) => {
   // Only allow dragging on the action bar background, not on buttons/controls
@@ -76,29 +93,69 @@ const handleMouseMove = (event: MouseEvent) => {
   if (!isDragging.value) return
 
   const deltaX = event.clientX - dragStartX.value
-  const newOffset = dragStartOffset.value + deltaX
-
-  // Limit to 25% of window width on either side
   const maxOffset = window.innerWidth * 0.25
-  actionBarOffset.value = Math.max(-maxOffset, Math.min(maxOffset, newOffset))
+  const newOffset = Math.max(-maxOffset, Math.min(maxOffset, dragStartOffset.value + deltaX))
+
+  pendingOffset = newOffset
+  cancelAnimationFrame(rafId)
+  rafId = requestAnimationFrame(() => {
+    if (pendingOffset !== null) {
+      applyActionBarOffset(pendingOffset)
+      pendingOffset = null
+    }
+  })
 }
 
 const handleMouseUp = () => {
+  if (!isDragging.value) return
   isDragging.value = false
+  cancelAnimationFrame(rafId)
+  // Commit the last position that hadn't been painted yet
+  if (pendingOffset !== null) {
+    applyActionBarOffset(pendingOffset)
+    pendingOffset = null
+  }
+}
+
+const handleScanStart = () => { isShowFloatBar.value = false }
+const handleScanEnd = () => { isShowFloatBar.value = true }
+
+// Video-only mode
+const isVideoOnlyMode = ref(false)
+const enterVideoOnlyMode = () => {
+  isVideoOnlyMode.value = true
+  isShowFloatBar.value = false
+}
+const exitVideoOnlyMode = () => {
+  isVideoOnlyMode.value = false
+  isShowFloatBar.value = true
+}
+const handleVideoOnlyKeydown = (e: KeyboardEvent) => {
+  if (isVideoOnlyMode.value && e.key === 'Escape') {
+    e.stopImmediatePropagation()
+    exitVideoOnlyMode()
+  }
 }
 
 onMounted(() => {
   document.addEventListener('mousemove', handleMouseMove)
   document.addEventListener('mouseup', handleMouseUp)
+  eventBus.on('scan_start', handleScanStart)
+  eventBus.on('scan_end', handleScanEnd)
+  document.addEventListener('keydown', handleVideoOnlyKeydown, true)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('mousemove', handleMouseMove)
   document.removeEventListener('mouseup', handleMouseUp)
+  eventBus.off('scan_start', handleScanStart)
+  eventBus.off('scan_end', handleScanEnd)
+  document.removeEventListener('keydown', handleVideoOnlyKeydown, true)
 })
 
 // Media devices composable
 const {
+  deviceList,
   loadingText: devicesLoadingText,
   isDeviceInfoVisible,
   permissionCamera,
@@ -116,6 +173,7 @@ const {
   mediaStreamRef,
   loadingText: streamLoadingText,
   isStreaming,
+  waitingForVideoDevice,
   startMediaStream,
   handleStartStreaming,
   stopMediaStreaming,
@@ -130,7 +188,6 @@ const {
   onCapabilitiesQuery: (videoTrack) => {
     queryCameraCapabilities(videoTrack)
   },
-  showDeviceInfoTemporarily,
 })
 
 // Camera capabilities composable
@@ -139,7 +196,9 @@ const {
   queryCameraCapabilities,
   applyResolutionSettings,
   recheckResolutionSettings,
-} = useCameraCapabilities()
+} = useCameraCapabilities({
+  restartStream: () => handleStartStreaming(),
+})
 
 // Video recording composable
 const {videoRecorder} = useVideoRecording(videoRef)
@@ -156,7 +215,7 @@ const {
   isFullscreen,
   isActionBarVisible,
   resetError,
-} = usePlayerUI(rootRef, {isShowFloatBar, isShowFloatBarInNonKvmMode})
+} = usePlayerUI({isShowFloatBar, isShowFloatBarInNonKvmMode})
 
 // Track dialog visibility states
 const isMacroDialogVisible = ref(false)
@@ -169,7 +228,7 @@ const isAnyDialogOpen = computed(() => {
 // Video filters composable
 const {videoFilterStyle, videoWrapperStyle, deviceInfoOverlayStyle} = useVideoFilters({
   graphInfo,
-  isFullscreen,
+  containerRef: mainGraphRef,
 })
 
 // Computed properties
@@ -192,16 +251,19 @@ const enhancedDeviceInfo = computed(() => {
     return null
   }
 
+  const {width, height, frameRate} = graphInfo.value
+  const config = settingsStore.videoConfig
   return {
     ...currentDeviceInfo.value,
-    resolution: `${graphInfo.value.width}x${graphInfo.value.height}`,
+    resolution: `${width}x${height}${frameRate ? ` @ ${Math.round(frameRate)}fps` : ''}`,
     aspectRatio: graphInfo.value.aspectRatio.toFixed(2),
-    config: settingsStore.videoConfig
-      ? `${settingsStore.videoConfig.width}x${settingsStore.videoConfig.height} @ ${settingsStore.videoConfig.frameRate}fps`
-      : null,
+    config: config?.userSelected
+      ? `requested ${config.width}x${config.height} @ ${config.frameRate}fps`
+      : 'auto',
   }
 })
 
+// Set when the selected capture device was unplugged, so it can resume when plugged back in
 /**
  * Listen for device change events
  */
@@ -209,35 +271,37 @@ const listenDeviceChange = () => {
   navigator.mediaDevices.ondevicechange = async () => {
     await updateDeviceList()
 
-    // Check if currently selected devices still exist
+    // Check if currently selected devices still exist. The selection (and its saved mode) is
+    // kept so a bumped cable doesn't force the user to reconfigure.
     if (settingsStore.currentVideoDeviceId) {
       const videoExists = videoDeviceList.value.some(
         (device) => device.deviceId === settingsStore.currentVideoDeviceId
       )
-      if (!videoExists) {
+      if (!videoExists && isStreaming.value) {
         console.warn('Active video device was removed. Stopping stream.')
         stopMediaStreaming()
-        settingsStore.currentVideoDeviceId = ''
-        settingsStore.videoConfig = null
+        waitingForVideoDevice.value = true
         window.$notification({
           type: 'warning',
-          message: 'Video device disconnected',
+          message: 'Video device disconnected, will resume when reconnected',
           timeout: 3000,
         })
+        return
+      } else if (videoExists && waitingForVideoDevice.value && !isStreaming.value) {
+        await handleStartStreaming()
+        return
       }
     }
 
-    if (settingsStore.currentAudioDeviceId) {
+    // Audio keeps its selection too: drop it from the stream while missing, add it back on return
+    if (settingsStore.currentAudioDeviceId && isStreaming.value) {
       const audioExists = audioDeviceList.value.some(
         (device) => device.deviceId === settingsStore.currentAudioDeviceId
       )
-      if (!audioExists) {
-        console.warn('Active audio device was removed.')
-        settingsStore.currentAudioDeviceId = ''
-        // Restart stream with video only if video device still exists
-        if (settingsStore.currentVideoDeviceId && isStreaming.value) {
-          await handleStartStreaming()
-        }
+      const hasAudioTrack = !!mediaStreamRef.value?.getAudioTracks().some((t) => t.readyState === 'live')
+      if (audioExists !== hasAudioTrack) {
+        console.warn(`Audio device ${audioExists ? 'reconnected' : 'removed'}, restarting stream`)
+        await handleStartStreaming()
       }
     }
   }
@@ -265,27 +329,36 @@ const initDevices = async () => {
       )
     }
 
-    // Request permissions first to get proper device labels
-    try {
-      const tempStream = await navigator.mediaDevices.getUserMedia({audio: true})
-      tempStream.getTracks().forEach((track) => track.stop())
-    } catch (e) {
-      console.warn('getUserMedia audio Error:', e)
-    }
-    try {
-      const tempStream = await navigator.mediaDevices.getUserMedia({video: true})
-      tempStream.getTracks().forEach((track) => track.stop())
-    } catch (e) {
-      console.warn('getUserMedia video Error:', e)
-    }
-
-    // Update device list after permissions are granted
+    // Device labels are empty until permission is granted. Only open throwaway streams when
+    // needed: each one briefly opens the capture card at the browser's default resolution.
     await updateDeviceList()
+    const devices = deviceList.value
+    const needsPermission = (kind: MediaDeviceKind) =>
+      devices.some((d) => d.kind === kind && !d.label)
+    // Requested separately so denying the microphone doesn't also block the camera
+    const kinds = (['audioinput', 'videoinput'] as const).filter(needsPermission)
+    for (const kind of kinds) {
+      try {
+        const tempStream = await navigator.mediaDevices.getUserMedia(
+          kind === 'audioinput' ? {audio: true} : {video: true}
+        )
+        tempStream.getTracks().forEach((track) => track.stop())
+      } catch (e) {
+        console.warn(`getUserMedia ${kind} permission error:`, e)
+      }
+    }
+    if (kinds.length) {
+      await updateDeviceList()
+    }
 
-    if (settingsStore.currentVideoDeviceId || settingsStore.currentAudioDeviceId) {
-      await startMediaStream()
-      listenDeviceChange()
-      return
+    if (settingsStore.currentVideoDeviceId) {
+      // Saved device not plugged in yet: resume automatically once it appears
+      waitingForVideoDevice.value = !videoDeviceList.value.some(
+        (d) => d.deviceId === settingsStore.currentVideoDeviceId
+      )
+      if (!waitingForVideoDevice.value) {
+        await startMediaStream()
+      }
     }
 
     listenDeviceChange()
@@ -316,6 +389,16 @@ const initDevices = async () => {
 }
 
 /**
+ * Clicking the video enters KVM control; overlays and the idle placeholder don't
+ */
+const handleRootClick = () => {
+  if (isVideoOnlyMode.value || !isStreaming.value || loadingText.value || criticalError.value) {
+    return
+  }
+  enterInputMode()
+}
+
+/**
  * Enter KVM control mode
  */
 const enterInputMode = async () => {
@@ -324,6 +407,11 @@ const enterInputMode = async () => {
   }
   // Prevent entering input mode when any dialog is open
   if (isAnyDialogOpen.value) {
+    return
+  }
+
+  // Clicks on the target bubble up here while captured; don't re-prompt for each one
+  if (kvmInputRef.value.isCaptured?.()) {
     return
   }
 
@@ -341,17 +429,9 @@ const enterInputMode = async () => {
 /**
  * Apply resolution settings wrapper
  */
-const handleApplyResolution = async () => {
-  await applyResolutionSettings(
-    settingsStore.currentVideoDeviceId,
-    settingsStore.currentAudioDeviceId,
-    mediaStreamRef,
-    videoRef,
-    (info) => {
-      graphInfo.value = info
-      showDeviceInfoTemporarily()
-    }
-  )
+const handleApplyResolution = async (mode: {width: number; height: number; fps: number} | null) => {
+  await applyResolutionSettings(mode)
+  showDeviceInfoTemporarily()
 }
 
 /**
@@ -359,6 +439,20 @@ const handleApplyResolution = async () => {
  */
 const handleRecheckResolutions = async () => {
   await recheckResolutionSettings(mediaStreamRef)
+}
+
+const handleResetDevices = () => {
+  stopMediaStreaming()
+  settingsStore.currentVideoDeviceId = ''
+  settingsStore.currentAudioDeviceId = ''
+  settingsStore.videoConfig = null
+  settingsStore.cameraCapabilities = null
+  settingsStore.cameraCapabilitiesCache = {}
+  window.$notification({
+    type: 'success',
+    message: 'Device data cleared. Please reselect your camera and audio devices.',
+    timeout: 4000,
+  })
 }
 
 // Lifecycle hooks
@@ -378,15 +472,15 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="rootRef" class="web-mediadevices-player" @click="enterInputMode">
+  <div class="web-mediadevices-player" @click="handleRootClick">
     <!-- Critical Error Fallback UI -->
     <div v-if="criticalError" class="error-boundary">
       <div class="error-content">
-        <span class="error-icon">⚠️</span>
+        <KbIcon class="error-icon" name="warning" :size="64" />
         <h2>{{ criticalError.message }}</h2>
         <p v-if="criticalError.details" class="error-details">{{ criticalError.details }}</p>
         <div class="error-actions">
-          <button class="btn-retry" @click="resetError(), initDevices()">
+          <button class="btn-retry" @click.stop="resetError(), initDevices()">
             <span class="mdi mdi-refresh"></span>
             Retry
           </button>
@@ -395,22 +489,18 @@ onBeforeUnmount(() => {
     </div>
 
     <transition name="fade">
-      <div class="loading-layer" v-if="loadingText">⌛ {{ loadingText }}</div>
+      <div class="loading-layer" v-if="loadingText"><KbIcon class="spin" name="loading" :size="28" /> {{ loadingText }}</div>
     </transition>
     <div
       @click.stop
-      :class="[settingsStore.floatUI ? 'float-ui' : null]"
+      :class="[settingsStore.floatUI ? 'float-ui' : null, {dragging: isDragging}]"
       class="action-bar-wrap"
+      ref="actionBarWrapRef"
       :style="{transform: `translateX(${actionBarOffset}px)`}"
     >
-      <DragButton
-        v-if="settingsStore.floatUI && settingsStore.enableKvmInput"
-        :docked="!isShowFloatBar"
-        @click.stop="isShowFloatBar = !isShowFloatBar"
-      />
       <div
         ref="actionBarRef"
-        class="action-bar font-emoji"
+        class="action-bar"
         :class="[
           settingsStore.floatUI && 'float-bar',
           {
@@ -429,7 +519,7 @@ onBeforeUnmount(() => {
                 title="Select Video Device"
                 :class="{activated: settingsStore.currentVideoDeviceId}"
               >
-                <span class="mdi mdi-monitor"></span>
+                <KbIcon name="video-source" />
                 <template v-if="permissionCamera === 'granted'">
                   <select
                     class="btn-no-style"
@@ -452,7 +542,7 @@ onBeforeUnmount(() => {
                   v-else
                   @click="requirePermission"
                 >
-                  ⚠️
+                  <KbIcon name="warning" :size="14" />
                 </button>
               </label>
 
@@ -462,7 +552,7 @@ onBeforeUnmount(() => {
                 title="Select Audio Device"
                 :class="{activated: settingsStore.currentAudioDeviceId}"
               >
-                <span class="mdi mdi-speaker"></span>
+                <KbIcon name="audio-source" />
                 <template v-if="permissionMicrophone === 'granted'">
                   <select
                     class="btn-no-style"
@@ -485,7 +575,7 @@ onBeforeUnmount(() => {
                   v-else
                   @click="requirePermission"
                 >
-                  ⚠️
+                  <KbIcon name="warning" :size="14" />
                 </button>
               </label>
 
@@ -495,7 +585,7 @@ onBeforeUnmount(() => {
                 v-if="isStreaming"
                 title="Stop All Media Devices"
               >
-                <span class="mdi mdi-stop-circle-outline"></span>
+                <KbIcon name="stop" />
               </button>
               <button
                 class="btn-no-style green"
@@ -503,10 +593,10 @@ onBeforeUnmount(() => {
                 @click="handleStartStreaming"
                 v-else
               >
-                <span class="mdi mdi-play-circle-outline"></span>
+                <KbIcon name="play" />
               </button>
               <button class="btn-no-style" @click="clearSelect" title="🛑 Reset All Media Devices">
-                <span class="mdi mdi-close-circle-outline"></span>
+                <KbIcon name="reset" />
               </button>
 
               <!-- Separator -->
@@ -519,7 +609,7 @@ onBeforeUnmount(() => {
                 :disabled="!isStreaming"
                 title="Screenshot (Shift+Click for area)"
               >
-                <span class="mdi mdi-camera-plus-outline"></span>
+                <KbIcon name="screenshot" />
               </button>
 
               <!-- OCR Scanner button - greyed out when not streaming -->
@@ -536,10 +626,11 @@ onBeforeUnmount(() => {
                 <button
                   class="btn-no-style recording"
                   v-if="Boolean(videoRecorder.mediaRecorder)"
+                  :disabled="videoRecorder.stopping"
                   @click="videoRecorder.stop()"
-                  title="📹 Recording, click to save record"
+                  :title="videoRecorder.stopping ? 'Saving recording...' : '📹 Recording, click to save record'"
                 >
-                  <span class="mdi mdi-record"></span>
+                  <KbIcon name="recording" />
                 </button>
                 <button
                   v-else
@@ -548,7 +639,7 @@ onBeforeUnmount(() => {
                   :disabled="!isStreaming"
                   title="Record"
                 >
-                  <span class="mdi mdi-radiobox-marked"></span>
+                  <KbIcon name="record" />
                 </button>
               </template>
             </div>
@@ -562,14 +653,24 @@ onBeforeUnmount(() => {
             class="action-bar-side right"
           >
             <template v-if="settingsStore.enableKvmInput">
-              <KBKvmInput ref="kvmInputRef" @connected="enterInputMode" />
-              <span style="opacity: 0.5">|</span>
-              <MacrosMenu />
-              <span style="opacity: 0.5">|</span>
+              <KBKvmInput ref="kvmInputRef" :videoOnlyMode="isVideoOnlyMode" @connected="enterInputMode" @menu-close="isShowFloatBar = false" @menu-open="isShowFloatBar = true" />
+              <template v-if="serialPort">
+                <div class="menu-separator"></div>
+                <MacrosMenu />
+              </template>
+              <div class="menu-separator"></div>
             </template>
 
             <button @click="showSettings = !showSettings" title="Settings" class="btn-no-style">
-              <span class="mdi mdi-cog"></span>
+              <KbIcon name="settings" />
+            </button>
+            <button
+              class="btn-no-style"
+              :class="{active: isVideoOnlyMode}"
+              :title="isVideoOnlyMode ? 'Exit Video Only Mode (Esc)' : 'Video Only Mode'"
+              @click.stop="isVideoOnlyMode ? exitVideoOnlyMode() : enterVideoOnlyMode()"
+            >
+              <KbIcon :name="isVideoOnlyMode ? 'video-only-off' : 'video-only'" />
             </button>
             <button
               v-if="!isTauri"
@@ -577,8 +678,8 @@ onBeforeUnmount(() => {
               class="btn-no-style"
               title="Fullscreen"
             >
-              <span v-if="!isFullscreen" class="mdi mdi-fullscreen"></span>
-              <span v-else class="mdi mdi-fullscreen-exit"></span>
+              <KbIcon v-if="!isFullscreen" name="fullscreen" />
+              <KbIcon v-else name="fullscreen-exit" />
             </button>
             <TauriActions v-if="isTauri" />
           </div>
@@ -586,7 +687,14 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div class="main-graph-wrapper">
+    <div ref="mainGraphRef" class="main-graph-wrapper">
+      <!-- No-stream placeholder — lives outside video-wrapper so it fills the full app area -->
+      <transition name="fade">
+        <div v-if="!isStreaming && !loadingText" class="no-stream-placeholder">
+          <img :src="logoUrl" alt="KitBash KVM" class="no-stream-logo" />
+        </div>
+      </transition>
+
       <div
         class="video-wrapper"
         @dblclick.stop="toggleFullScreen"
@@ -616,6 +724,7 @@ onBeforeUnmount(() => {
           v-show="!loadingText"
         ></video>
 
+
         <!-- Device Info Overlay - Auto-hides after 8 seconds -->
         <transition name="fade">
           <div
@@ -625,11 +734,11 @@ onBeforeUnmount(() => {
           >
             <div class="device-info-content">
               <div class="info-row">
-                <span class="mdi mdi-video"></span>
+                <KbIcon name="video-source" :size="16" />
                 <span class="device-name">{{ enhancedDeviceInfo.videoName }}</span>
               </div>
               <div v-if="enhancedDeviceInfo.audioName" class="info-row">
-                <span class="mdi mdi-microphone"></span>
+                <KbIcon name="microphone" :size="16" />
                 <span class="device-name">{{ enhancedDeviceInfo.audioName }}</span>
               </div>
               <div class="info-row">
@@ -646,13 +755,13 @@ onBeforeUnmount(() => {
     </div>
 
     <SettingsPrompt
-      @click.stop
       v-model:visible="showSettings"
       v-model:macro-dialog-visible="isMacroDialogVisible"
-      :graph-info="graphInfo"
+      :graph-info="isStreaming ? graphInfo : null"
       :is-testing-capabilities="isTestingCapabilities"
       @apply-resolution="handleApplyResolution"
       @recheck-resolutions="handleRecheckResolutions"
+      @reset-devices="handleResetDevices"
     />
   </div>
 </template>
@@ -676,11 +785,15 @@ onBeforeUnmount(() => {
     transition: transform 0.2s ease-out;
     will-change: transform;
 
+    &.dragging {
+      transition: none;
+    }
+
     &.float-ui {
       position: absolute;
       left: 0;
       right: 0;
-      padding-top: 10px;
+      padding-top: 0;
     }
 
     .action-bar {
@@ -704,57 +817,67 @@ onBeforeUnmount(() => {
       }
 
       &.float-bar {
-        background: rgba(0, 0, 0, 0.7);
-        outline: 1px solid rgba(255, 255, 255, 0.1);
-
-        border-radius: 100px;
+        // KitBash palette: frosted charcoal panel with the logo's orange / red / navy as a base stripe
+        position: relative;
+        background: rgba(16, 21, 27, 0.86);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-top: none;
+        border-radius: 0 0 18px 18px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
         align-items: center;
 
         margin: 0 auto;
-        max-width: 1250px;
+        width: max-content;
+        max-width: calc(100vw - 16px);
+        height: 50px;
+        padding: 4px 16px 6px;
 
         visibility: hidden;
         opacity: 0;
-        width: 0;
-        height: 0;
-        overflow: hidden;
-        transition: all 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+        transform: translateY(-110%);
+        transition:
+          opacity 0.15s ease,
+          transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.15),
+          visibility 0s linear 0.35s;
+
+        &::after {
+          content: '';
+          position: absolute;
+          left: 18px;
+          right: 18px;
+          bottom: 0;
+          height: 2px;
+          border-radius: 2px;
+          background: linear-gradient(90deg, #ffa01e 0 33%, #ff3f1e 33% 66%, #2a7bb0 66% 100%);
+          opacity: 0.85;
+          pointer-events: none;
+        }
 
         &.visible {
           visibility: visible;
           opacity: 1;
-
-          width: 625px;
-          height: 62.5px;
-          min-height: 35px;
-          padding: 5px 17.5px;
-
-          transition-delay: 0.15s;
+          transform: translateY(0);
+          transition:
+            opacity 0.2s ease,
+            transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.15),
+            visibility 0s linear;
         }
 
         .flex-row-center-gap {
-          gap: 5px;
+          gap: 4px;
         }
 
         .select-label-wrapper {
-          border-radius: 5px;
-          width: 27.5px;
-          display: flex;
-          align-items: center;
+          width: 34px;
+          height: 34px;
+          padding: 0;
           justify-content: center;
-          overflow: hidden;
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-
-          &:hover {
-            background-color: rgba(255, 255, 255, 0.15);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3),
-                        0 0 0 1px rgba(255, 255, 255, 0.1);
-          }
 
           &::after {
-            left: 4px;
-            right: 4px;
+            left: 9px;
+            right: 9px;
+            bottom: 2px;
           }
 
           select {
@@ -765,13 +888,19 @@ onBeforeUnmount(() => {
             right: 0;
             bottom: 0;
             opacity: 0;
+            cursor: pointer;
           }
 
           .icon-alert {
             position: absolute;
             z-index: 2;
-            right: 0;
-            bottom: 0;
+            right: -2px;
+            bottom: -2px;
+            min-width: 0;
+            width: auto;
+            height: auto;
+            padding: 0;
+            background: none;
           }
         }
       }
@@ -787,21 +916,17 @@ onBeforeUnmount(() => {
 
       .select-label-wrapper {
         position: relative;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        border-radius: 9px;
         padding: 4px 6px;
+        transition:
+          background-color 0.2s ease,
+          transform 0.2s ease;
 
         &:hover {
-          background-color: rgba(255, 255, 255, 0.1);
+          background-color: rgba(255, 255, 255, 0.09);
           transform: translateY(-1px);
-          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-        }
-
-        &.activated {
-          &::after {
-            background-color: #4caf50;
-            box-shadow: 0 0 8px rgba(76, 175, 80, 0.6);
-          }
         }
 
         &::after {
@@ -811,16 +936,21 @@ onBeforeUnmount(() => {
           left: 0;
           right: 0;
           height: 2px;
-          background-color: currentColor;
+          background-color: rgba(255, 255, 255, 0.18);
           border-radius: 10px;
           pointer-events: none;
           transition: all 0.3s ease;
         }
 
-        .mdi {
+        // Device selected
+        &.activated::after {
+          background-color: #ffa01e;
+          box-shadow: 0 0 6px rgba(255, 160, 30, 0.7);
+        }
+
+        .kb-icon {
           position: relative;
           z-index: 1;
-          pointer-events: none;
         }
       }
 
@@ -852,6 +982,11 @@ onBeforeUnmount(() => {
           align-items: center;
           gap: 2.5px;
         }
+
+        .btn-no-style.active {
+          background-color: rgba(255, 160, 30, 0.14);
+          box-shadow: inset 0 0 0 1px rgba(255, 160, 30, 0.55);
+        }
       }
 
       select {
@@ -862,77 +997,58 @@ onBeforeUnmount(() => {
         font-size: 22.5px;
       }
 
-      .recording {
-        color: #f44336;
-        animation: linear blink-animation 3s infinite;
+      .recording .kb-icon {
+        animation: linear blink-animation 2s infinite;
       }
 
       .btn-no-style {
         display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 34px;
+        height: 34px;
         line-height: 1;
-        border-radius: 100px;
-        padding: 2.5px;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border-radius: 9px;
+        padding: 0 6px;
         position: relative;
+        transition:
+          background-color 0.2s ease,
+          transform 0.2s ease,
+          opacity 0.2s ease;
 
-        &:hover {
-          background-color: rgba(255, 255, 255, 0.15);
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3),
-                      0 0 0 1px rgba(255, 255, 255, 0.1);
+        .kb-icon {
+          transition: transform 0.2s ease;
         }
 
-        &:active {
-          transform: translateY(0);
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-        }
+        &:hover:not(:disabled) {
+          background-color: rgba(255, 255, 255, 0.09);
 
-        &.blue {
-          color: #2196f3;
-
-          &:hover {
-            background-color: rgba(33, 150, 243, 0.2);
-            box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4),
-                        0 0 0 1px rgba(33, 150, 243, 0.3);
+          .kb-icon {
+            transform: translateY(-1px) scale(1.08);
           }
         }
 
-        &.green {
-          color: #4caf50;
-
-          &:hover {
-            background-color: rgba(76, 175, 80, 0.2);
-            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4),
-                        0 0 0 1px rgba(76, 175, 80, 0.3);
-          }
+        &:active:not(:disabled) .kb-icon {
+          transform: scale(0.94);
         }
 
-        &.orange {
-          color: #ffcc00;
-
-          &:hover {
-            background-color: rgba(255, 204, 0, 0.2);
-            box-shadow: 0 4px 12px rgba(255, 204, 0, 0.4),
-                        0 0 0 1px rgba(255, 204, 0, 0.3);
-          }
+        &:focus-visible {
+          outline: 2px solid #ffa01e;
+          outline-offset: 1px;
         }
 
-        &.red {
-          color: #f44336;
-
-          &:hover {
-            background-color: rgba(244, 67, 54, 0.2);
-            box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4),
-                        0 0 0 1px rgba(244, 67, 54, 0.3);
-          }
+        &:disabled {
+          opacity: 0.35;
+          filter: grayscale(0.8);
+          cursor: not-allowed;
         }
       }
 
       .menu-separator {
         width: 1px;
-        height: 24px;
-        background: rgba(255, 255, 255, 0.2);
-        margin: 0 8px;
+        height: 22px;
+        background: rgba(255, 255, 255, 0.14);
+        margin: 0 6px;
       }
     }
   }
@@ -943,14 +1059,31 @@ onBeforeUnmount(() => {
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative;
+  }
+
+  .no-stream-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .no-stream-logo {
+    width: clamp(240px, 52.5%, 600px);
+    opacity: 0.35;
+    user-select: none;
   }
 
   .video-wrapper {
-    max-width: 100%;
-    max-height: 100%;
+    // Sized in px by useVideoFilters; may exceed the container before rotation (±90°)
+    flex-shrink: 0;
     position: relative;
 
     video {
+      display: block;
       width: 100%;
       height: 100%;
       transition: all 1s;
@@ -1036,6 +1169,7 @@ onBeforeUnmount(() => {
   }
 
   .loading-layer {
+    gap: 12px;
     position: absolute;
     top: 0;
     left: 0;
@@ -1049,6 +1183,16 @@ onBeforeUnmount(() => {
     align-items: center;
     justify-content: center;
     transition: all 0.3s;
+  }
+
+  .loading-layer .spin {
+    animation: kb-spin 1s linear infinite;
+  }
+
+  @keyframes kb-spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .loading-layer.visible {
@@ -1078,9 +1222,7 @@ onBeforeUnmount(() => {
       border: 1px solid rgba(255, 255, 255, 0.1);
 
       .error-icon {
-        font-size: 64px;
-        display: block;
-        margin-bottom: 20px;
+        margin: 0 auto 20px;
       }
 
       h2 {

@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import {toRefs} from 'vue'
-import moment from 'moment'
 import type {INotification} from '@/components/NotificationList/notification-list'
 import NotifyItem from '@/components/NotificationList/NotifyItem.vue'
 
@@ -9,19 +8,22 @@ const props = defineProps<{
 }>()
 const {notifications} = toRefs(props)
 
-const removeNotification = (index: number) => {
-  notifications.value.splice(index, 1)
+const removeNotification = (id: number) => {
+  const index = notifications.value.findIndex((n) => n.id === id)
+  if (index !== -1) {
+    notifications.value.splice(index, 1)
+  }
 }
 </script>
 
 <template>
-  <div class="notification-list scrollbar-mini">
+  <div class="notification-list scrollbar-mini" tabindex="-1">
     <TransitionGroup name="list" tag="div" class="notification-container">
       <NotifyItem
-        v-for="(item, index) in notifications"
-        :key="item.timestamp"
+        v-for="item in notifications"
+        :key="item.id"
         :item="item"
-        @remove="removeNotification(index)"
+        @remove="removeNotification(item.id)"
       />
     </TransitionGroup>
   </div>
@@ -36,11 +38,10 @@ const removeNotification = (index: number) => {
   padding: 10px;
   width: 300px;
   z-index: 1000;
-  //scrollbar-gutter: stable both-edges;
-  overflow-x: hidden;
-  overflow-y: auto;
-  scrollbar-width: thin;
+  overflow: hidden;
   pointer-events: none;
+  outline: none;
+  caret-color: transparent;
 
   button {
     pointer-events: auto;

@@ -114,7 +114,7 @@ export function useMediaDevices() {
     )
 
     // Determine audio name
-    let audioName = null
+    let audioName: string | null = null
     if (settingsStore.currentAudioDeviceId) {
       audioName = audioDevice?.label || 'Unknown Microphone'
     }

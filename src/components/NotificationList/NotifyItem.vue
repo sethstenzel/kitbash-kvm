@@ -1,38 +1,45 @@
 <script lang="ts" setup="">
-import {INotification} from '@/components/NotificationList/notification-list'
-import {onMounted, ref, toRefs} from 'vue'
+import type {INotification} from '@/components/NotificationList/notification-list'
+import {onBeforeUnmount, onMounted, ref} from 'vue'
 
-const props = withDefaults(
-  defineProps<{
-    item: INotification
-  }>(),
-  {},
-)
+const props = defineProps<{
+  item: INotification
+}>()
 const emit = defineEmits(['remove'])
-const {item} = toRefs(props)
 
+const TICK_MS = 10
 const countdownMax = ref(0)
 const countdownPercent = ref(100)
-const timer = ref()
 const isIn = ref(false)
+let remaining = 0
+let timer: ReturnType<typeof setInterval> | undefined
+
+const stopTimer = () => {
+  clearInterval(timer)
+  timer = undefined
+}
 
 onMounted(() => {
-  if (item.value.timeout && item.value.timeout > 0) {
-    countdownMax.value = item.value.timeout
-    timer.value = setInterval(() => {
+  const timeout = props.item.timeout
+  if (timeout && timeout > 0) {
+    countdownMax.value = timeout
+    remaining = timeout
+    timer = setInterval(() => {
+      // Paused while hovered
       if (isIn.value) {
         return
       }
-      item.value.timeout -= 10
-
-      countdownPercent.value = (item.value.timeout / countdownMax.value) * 100
-      if (countdownPercent.value <= 0) {
-        clearInterval(timer.value)
+      remaining -= TICK_MS
+      countdownPercent.value = (remaining / countdownMax.value) * 100
+      if (remaining <= 0) {
+        stopTimer()
         emit('remove')
       }
-    }, 10)
+    }, TICK_MS)
   }
 })
+
+onBeforeUnmount(stopTimer)
 </script>
 
 <template>
@@ -41,6 +48,7 @@ onMounted(() => {
       <div class="message-type" :class="item.type">{{ item.type }}</div>
       <div class="message-content" v-if="item.html" v-html="item.html"></div>
       <div class="message-content" v-else>{{ item.message }}</div>
+      <div class="message-description" v-if="item.description">{{ item.description }}</div>
       <button class="btn-close" @click="emit('remove')">×</button>
 
       <div v-if="countdownMax" class="countdown-bar">
@@ -52,7 +60,7 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .notification-item {
-  user-select: text;
+  user-select: none;
   pointer-events: auto;
   width: 100%;
 
@@ -111,6 +119,12 @@ onMounted(() => {
     &.error {
       color: #f44336; // Red
     }
+  }
+
+  .message-description {
+    word-break: break-word;
+    font-size: 12px;
+    opacity: 0.75;
   }
 
   .message-content {

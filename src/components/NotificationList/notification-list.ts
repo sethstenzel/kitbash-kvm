@@ -2,16 +2,22 @@ import {ref, createApp, h, App} from 'vue'
 import NotificationList from './NotificationList.vue'
 
 export interface INotification {
+  // Unique per notification (list key); assigned on push
+  id: number
   type: 'info' | 'warning' | 'success' | 'error'
   message: string
+  // Optional second line under the message
+  description?: string
   html: string
   timestamp: number
   timeout: number
 }
 
 const notifications = ref<INotification[]>([])
+let nextId = 1
 
 const push = (notification: Partial<INotification>) => {
+  notification.id = nextId++
   if (!notification.timestamp) {
     notification.timestamp = Date.now()
   }
