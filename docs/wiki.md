@@ -35,7 +35,7 @@ KitBash KVM is a browser/desktop application that lets you control a remote comp
 2. Connect your CH9329/NanoKVM USB adapter between your computer and the target machine.
 3. Open KitBash KVM and allow camera and microphone access when the browser asks. (If access was denied, the source icons show a warning badge — click one to ask again.)
 4. Click the **Video Source** icon in the command bar and pick your capture card — the stream starts right away. Optionally pick the capture card's audio from the **Audio Source** icon.
-5. Set the correct **Baud Rate** in **Settings → Settings tab** (`9600` for a KitBash KVM, `57600` for a Sipeed USB KVM; set automatically when a KitBash capture card is detected).
+5. Set the correct **Baud Rate** in **Settings → General tab** (`9600` for a KitBash KVM, `57600` for a Sipeed USB KVM; set automatically when a KitBash capture card is detected).
 6. Click **Connect KVM (Serial)** and choose the adapter's port in the browser's port chooser. If no baud rate has been set yet, the app asks for one (default `9600`).
 7. Keyboard input is now forwarded to the target. Click the video to capture the mouse.
 
@@ -160,7 +160,7 @@ Mouse input, screenshots, OCR and QR scans all follow the rotation and flips. **
 
 ### Connecting
 
-1. Choose the correct **Baud Rate** in **Settings → Settings tab**:
+1. Choose the correct **Baud Rate** in **Settings → General tab**:
    - `9600` — KitBash KVM default (standard CH9329 firmware)
    - `57600` — Sipeed USB KVM default
    - `115200` — Other (e.g. modified CH9329 firmware)
@@ -190,7 +190,7 @@ With **Type clipboard on Ctrl+V** enabled (default), pressing **Ctrl+V** (**Cmd+
 
 ### Mouse Modes
 
-Set in **Settings → Settings tab → Cursor Mode**:
+Set in **Settings → General tab → Cursor Mode**:
 
 #### Absolute Mode (default)
 
@@ -418,7 +418,7 @@ Open with the **Settings (⚙)** button in the command bar. Close it with **Esc*
 | Flip & Rotate Video | Rotate: None / 90° / −90° / 180°; Flip: Mirror (left-right), Flip upside down |
 | Command Bar | Docked Command Bar / Floating Command Bar |
 
-### Settings Tab
+### General Tab
 
 | Setting | Description |
 |---------|-------------|

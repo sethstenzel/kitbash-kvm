@@ -457,7 +457,7 @@ const handleImportMacros = () => {
           </button>
           <button class="tab-btn" :class="{active: activeTab === 'settings'}" @click="activeTab = 'settings'">
             <span class="mdi mdi-tune"></span>
-            Settings
+            General
           </button>
           <button class="tab-btn" :class="{active: activeTab === 'macros'}" @click="activeTab = 'macros'">
             <span class="mdi mdi-script-text-play"></span>

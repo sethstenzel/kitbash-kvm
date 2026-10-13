@@ -5,6 +5,11 @@ Versions follow [Semantic Versioning](https://semver.org/): **MAJOR** for breaki
 **MINOR** for new features, **PATCH** for fixes. The version lives in `package.json` and is
 used by the web app (Settings > Advanced > About) and the desktop installers.
 
+## [2.3.1] - 2026-10-13
+
+### Changed
+- Settings: the "Settings" tab is renamed "General".
+
 ## [2.3.0] - 2026-10-13
 
 ### Added
