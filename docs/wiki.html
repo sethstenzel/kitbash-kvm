@@ -290,7 +290,7 @@
     <a href="#getting-started">Getting Started</a>
 
     <div class="nav-section">Interface</div>
-    <a href="#action-bar">Action Bar</a>
+    <a href="#command-bar">Command Bar</a>
     <a href="#video">Video &amp; Camera</a>
 
     <div class="nav-section">KVM Input</div>
@@ -339,6 +339,10 @@
       Together these let you see and control any machine that has a USB port and a video output,
       including machines during BIOS, OS installation, or without a network connection.
     </p>
+    <ul class="features">
+      <li><strong>Web app:</strong> <a href="https://controller.kitbashkvm.com">controller.kitbashkvm.com</a> in a Chromium-based browser (Chrome, Edge) — Web Serial is required for keyboard and mouse control. The web app can be installed as an app (PWA) and updates itself automatically.</li>
+      <li><strong>Desktop app:</strong> the same app built with Tauri, with an extra "keep window on top" button.</li>
+    </ul>
   </section>
 
   <!-- ══════════════════════════════════════════ -->
@@ -347,49 +351,76 @@
     <ol class="steps">
       <li>Connect your <strong>USB capture card</strong> to the target machine's video output (HDMI, DP, VGA via adapter).</li>
       <li>Connect your <strong>CH9329 / NanoKVM USB adapter</strong> between your computer and a USB port on the target machine.</li>
-      <li>Open KitBash KVM in your browser or launch the desktop app.</li>
-      <li>Select your <strong>Video</strong> device (the capture card) and optionally an <strong>Audio</strong> device from the action bar dropdowns.</li>
-      <li>Click the <strong>▶ Play</strong> button to start the video stream.</li>
-      <li>Select your <strong>Serial Port</strong> (the CH9329/NanoKVM adapter) and the correct <strong>Baud Rate</strong>.</li>
-      <li>Click <strong>Connect</strong> — you are now forwarding keyboard and mouse input to the target.</li>
+      <li>Open KitBash KVM in your browser or launch the desktop app, and allow camera and microphone access when asked. (If access was denied, the source icons show a warning badge — click one to ask again.)</li>
+      <li>Click the <strong>Video Source</strong> icon in the command bar and pick your capture card — the stream starts right away. Optionally pick the capture card's audio from the <strong>Audio Source</strong> icon.</li>
+      <li>Set the correct <strong>Baud Rate</strong> in <strong>Settings → Settings tab</strong>.</li>
+      <li>Click <strong>Connect KVM (Serial)</strong> and choose the adapter's port in the browser's port chooser. If no baud rate has been set yet, the app asks for one (default <code>9600</code>).</li>
+      <li>Keyboard input is now forwarded to the target. Click the video to capture the mouse.</li>
     </ol>
     <div class="callout tip">
       <span class="icon">💡</span>
       <div class="body">For a Sipeed NanoKVM USB, use baud rate <strong>57600</strong>. For a standard CH9329 module, use <strong>9600</strong>.</div>
     </div>
+    <div class="callout info">
+      <span class="icon">ℹ</span>
+      <div class="body">The selected video device is remembered: it starts automatically next time, and if it is not plugged in yet, the stream starts as soon as it appears.</div>
+    </div>
   </section>
 
   <!-- ══════════════════════════════════════════ -->
-  <section id="action-bar">
-    <h2>Action Bar</h2>
-    <p>The action bar runs across the top of the screen and contains all device controls, input tools, and settings.</p>
+  <section id="command-bar">
+    <h2>Command Bar</h2>
+    <p>The command bar runs across the top of the screen and contains all device controls, input tools, and settings. It uses the logo blue with white icons; hover over any icon for a tooltip.</p>
+    <table>
+      <thead><tr><th>Group</th><th>Controls</th></tr></thead>
+      <tbody>
+        <tr><td>Media</td><td>Video Source, Audio Source, Start / Stop Media Devices, Reset Media Devices</td></tr>
+        <tr><td>Capture</td><td>Screenshot, Text Extraction (OCR), QR Code Scanner, Record Video</td></tr>
+        <tr><td>KVM</td><td>Connect / Disconnect KVM (Serial), Stop Sending Text (only while sending), Text Transfer, Send Common Hotkeys, Send Media Keys, Macros (once connected)</td></tr>
+        <tr><td>App</td><td>Settings, Video Only Mode, Fullscreen (plus Keep on Top in the desktop app)</td></tr>
+      </tbody>
+    </table>
+    <p>The KVM group is hidden when <strong>Enable KVM keyboard &amp; mouse control</strong> is turned off in Settings.</p>
 
-    <h3>Float Mode vs. Static Mode</h3>
+    <h3>Icon Colours</h3>
+    <ul class="features">
+      <li><strong>Video Source</strong> / <strong>Audio Source</strong> icons turn <strong>green</strong> while that source is live.</li>
+      <li><strong>Stop Media Devices</strong> and <strong>Reset Media Devices</strong> are <strong>red</strong>.</li>
+      <li><strong>Record</strong> turns <strong>red</strong> and blinks while recording.</li>
+      <li>Screenshot and Record are greyed out, and OCR / QR are hidden, while no video is streaming.</li>
+    </ul>
+
+    <h3>Docked vs. Floating Command Bar</h3>
+    <p>Choose in <strong>Settings → Video tab → Command Bar</strong>:</p>
     <table>
       <thead><tr><th>Mode</th><th>Behaviour</th></tr></thead>
       <tbody>
-        <tr><td><strong>Float Mode</strong> (default)</td><td>A rounded pill that appears when you move the mouse and auto-hides after inactivity. Keeps the video unobstructed during use.</td></tr>
-        <tr><td><strong>Static Mode</strong></td><td>Always visible at the top of the screen. Toggle in Settings → Float UI.</td></tr>
+        <tr><td><strong>Floating Command Bar</strong> (default)</td><td>A rounded bar that slides down over the video. It hides while you control the target and comes back when you release control.</td></tr>
+        <tr><td><strong>Docked Command Bar</strong></td><td>A full-width strip that is always visible above the video, with the icons centred.</td></tr>
       </tbody>
     </table>
 
-    <h3>Auto-Hide Behaviour</h3>
+    <h3>Auto-Hide Behaviour (Floating)</h3>
     <ul class="features">
-      <li>Moving the mouse or pressing a key shows the bar.</li>
-      <li>Entering capture mode (clicking the video while connected) <strong>automatically hides</strong> the bar.</li>
-      <li>Pressing <kbd>Escape</kbd> to exit capture mode <strong>automatically shows</strong> the bar again.</li>
-      <li>Starting a QR or OCR scan hides the bar for the duration of the scan.</li>
+      <li>Typing on the target or moving the mouse in the captured video area <strong>hides</strong> the bar.</li>
+      <li>Holding <kbd>Esc</kbd> for about a second releases keyboard &amp; mouse and <strong>shows</strong> the bar again (see <a href="#kvm-input">Keyboard Capture</a>). In relative mouse mode, leaving pointer lock also shows it.</li>
+      <li>Starting a QR or OCR scan hides the bar until the scan ends.</li>
+      <li>With KVM input disabled, the bar shows when you move the mouse and hides (together with the cursor) after 3 seconds of inactivity.</li>
     </ul>
 
     <h3>Dragging</h3>
-    <p>Click and drag on any open area of the action bar to reposition it horizontally (up to 25% of the screen width in either direction).</p>
+    <p>Click and drag on any open area of the command bar to reposition it horizontally (up to 25% of the screen width in either direction).</p>
 
-    <h3>Desktop Controls (Tauri app only)</h3>
+    <h3>Video Only Mode</h3>
+    <p>The <strong>Video Only Mode</strong> button hides the command bar and stops forwarding keyboard and mouse input, so you can simply watch the target. Press <kbd>Esc</kbd> to exit.</p>
+
+    <h3>Fullscreen &amp; Desktop Controls</h3>
+    <p>In the browser, the <strong>Fullscreen</strong> button (or double-clicking the video while the mouse isn't captured) toggles fullscreen. When running as a desktop app, two buttons are shown instead:</p>
     <table>
       <thead><tr><th>Button</th><th>Function</th></tr></thead>
       <tbody>
         <tr><td>Fullscreen</td><td>Toggle fullscreen mode</td></tr>
-        <tr><td>📌 / 🔝 Always on Top</td><td>Pin the window above all other windows</td></tr>
+        <tr><td>Keep window on top (pin)</td><td>Pin the window above all other windows</td></tr>
       </tbody>
     </table>
   </section>
@@ -402,27 +433,28 @@
     <table>
       <thead><tr><th>Control</th><th>Description</th></tr></thead>
       <tbody>
-        <tr><td>Video dropdown</td><td>Select the USB capture card</td></tr>
-        <tr><td>Audio dropdown</td><td>Select the audio input from the capture card</td></tr>
-        <tr><td>▶ Play</td><td>Start streaming from the selected devices</td></tr>
-        <tr><td>⏹ Stop</td><td>Stop the stream and release devices</td></tr>
-        <tr><td>✕ Reset</td><td>Clear device selection</td></tr>
+        <tr><td>Video Source</td><td>Menu of video devices; a checkmark marks the current one. Selecting a device starts the stream; <strong>None</strong> turns it off</td></tr>
+        <tr><td>Audio Source</td><td>Menu of audio inputs, with a checkmark on the current one; <strong>None</strong> turns audio off</td></tr>
+        <tr><td>▶ Start Media Devices</td><td>Start streaming from the selected devices</td></tr>
+        <tr><td>⏹ Stop Media Devices</td><td>Stop the stream and release devices</td></tr>
+        <tr><td>Reset Media Devices</td><td>Stop the stream and clear the video/audio selection</td></tr>
       </tbody>
     </table>
-    <p>A device info overlay appears briefly when the stream starts, showing the device name, resolution, and frame rate.</p>
+    <p>When the stream starts, a notification shows the device name, resolution, and frame rate.</p>
+    <p>If the capture card is unplugged, the stream stops with a warning and <strong>resumes automatically</strong> when it is plugged back in. A missing or busy audio device never blocks video: the stream starts video-only and audio is added back when the device returns.</p>
 
     <h3>Resolution &amp; Frame Rate</h3>
-    <p>KitBash KVM can discover and test which resolution/FPS combinations your capture card actually supports.</p>
+    <p>By default the stream runs in <strong>Auto</strong> mode: the app requests 1920×1080 @ 60 fps and the capture card delivers the best mode it supports up to that (for example 1080p30 on MS2109-based cards, 1080p60 on MS2130).</p>
+    <p>The first time a device streams, the app tests which resolution/FPS combinations it really supports and caches the list per device. To pick a specific mode:</p>
     <ol class="steps">
       <li>Start the video stream.</li>
       <li>Open <strong>Settings → Video tab</strong>.</li>
-      <li>Click <strong>Recheck Video Settings</strong> — the app tests every common resolution and frame rate and lists only confirmed-working combinations.</li>
-      <li>Select a combination from the <strong>Resolution &amp; FPS</strong> dropdown.</li>
-      <li>Click <strong>Apply Resolution &amp; Frame Rate Settings</strong>.</li>
+      <li>Select a mode from the <strong>Resolution &amp; Frame Rate</strong> dropdown (or <strong>Auto (best available, up to 1080p @ 60fps)</strong>).</li>
+      <li>Click <strong>Apply Resolution &amp; Frame Rate Settings</strong> — the stream restarts in that mode and an overlay shows the actual and requested resolution for a few seconds.</li>
     </ol>
     <div class="callout info">
       <span class="icon">ℹ</span>
-      <div class="body">Tested combinations are cached per device so rechecking is only needed once, or when you change hardware.</div>
+      <div class="body">The chosen mode is remembered for that device. Click <strong>Recheck Video Settings</strong> to clear the cached list and re-test the device.</div>
     </div>
 
     <h3>Video Fit Modes</h3>
@@ -437,15 +469,12 @@
     </table>
 
     <h3>Flip &amp; Rotate</h3>
-    <p>Found in <strong>Settings → Video tab → right column</strong>:</p>
+    <p>Found in <strong>Settings → Video tab → Flip &amp; Rotate Video</strong>:</p>
     <ul class="features">
-      <li><strong>Rotation:</strong> None, 90°, −90°, 180°</li>
-      <li><strong>Flip Horizontal / Flip Vertical:</strong> Mirror the image along either axis</li>
+      <li><strong>Rotate:</strong> None, 90°, −90°, 180°</li>
+      <li><strong>Flip:</strong> <strong>Mirror (left-right)</strong> and <strong>Flip upside down</strong> (can be combined)</li>
     </ul>
-
-    <h3>Video Filters</h3>
-    <p>Optional CSS-based visual filters applied to the display only (does not affect recordings or screenshots):</p>
-    <p>Grayscale · Sepia · High Contrast · Hue Rotate · Blur · Invert · Brightness</p>
+    <p>Mouse input, screenshots, OCR and QR scans all follow the rotation and flips. <strong>Reset display settings</strong> (under the resolution controls) puts rotation, flips and fit mode back to their defaults.</p>
   </section>
 
   <!-- ══════════════════════════════════════════ -->
@@ -454,8 +483,7 @@
 
     <h3>Connecting</h3>
     <ol class="steps">
-      <li>Select the serial port for your adapter from the <strong>Serial Port</strong> dropdown.</li>
-      <li>Choose the correct <strong>Baud Rate</strong>:</li>
+      <li>Choose the correct <strong>Baud Rate</strong> in <strong>Settings → Settings tab</strong>:</li>
     </ol>
     <table>
       <thead><tr><th>Baud Rate</th><th>Device</th></tr></thead>
@@ -465,32 +493,44 @@
         <tr><td><code>115200</code></td><td>Modified CH9329 firmware</td></tr>
       </tbody>
     </table>
-    <ol class="steps" start="3">
-      <li>Click <strong>Connect</strong>.</li>
+    <ol class="steps" start="2">
+      <li>Click <strong>Connect KVM (Serial)</strong> in the command bar and select the adapter's port.</li>
     </ol>
+    <p>After connecting, the app asks the chip for its info. If it does not answer, a warning says the baud rate may be wrong. Changing the baud rate while connected closes the connection; connect again afterwards.</p>
+    <div class="callout warn">
+      <span class="icon">⚠</span>
+      <div class="body">If the adapter is unplugged or the connection fails, all keys and buttons are released, a <strong>KVM serial device disconnected</strong> warning appears and the connect button returns. Click <strong>Disconnect KVM (Serial)</strong> to close the connection yourself.</div>
+    </div>
 
     <h3>Keyboard Capture</h3>
-    <p>Once connected, click anywhere on the video to enter capture mode. All keystrokes are forwarded to the target machine.</p>
+    <p>Once connected, keystrokes are forwarded to the target machine. Clicking the video also captures the mouse.</p>
     <ul class="features">
-      <li>Press <kbd>Escape</kbd> to exit capture — the action bar reappears automatically.</li>
-      <li>Full modifier key support: <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Alt</kbd> <kbd>Win</kbd>/<kbd>Cmd</kbd></li>
+      <li>Keys are sent by <strong>physical position</strong> (like a real USB keyboard), so the target's keyboard layout decides which character appears. Full modifier support: <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Alt</kbd> <kbd>AltGr</kbd> <kbd>Win</kbd>/<kbd>Cmd</kbd></li>
+      <li><kbd>Esc</kbd> is forwarded to the target like any other key.</li>
+      <li><strong>Hold <kbd>Esc</kbd> for about 1 second</strong> to release keyboard &amp; mouse capture — the command bar reappears. Click the video to capture again.</li>
+      <li>While the mouse is over the command bar, or one of its menus is open, key presses are <strong>not</strong> sent to the target (so e.g. <kbd>Shift</kbd>+Click on a toolbar button works). Open dialogs and Settings also keep their keys.</li>
+      <li>All held keys and buttons are released on the target when the window loses focus.</li>
+      <li><strong>Keyboard Lock:</strong> in browser fullscreen while the KVM is connected, shortcuts such as <kbd>Ctrl</kbd>+<kbd>W</kbd>, <kbd>Ctrl</kbd>+<kbd>T</kbd>, <kbd>Ctrl</kbd>+<kbd>N</kbd> and <kbd>Alt</kbd>+<kbd>Tab</kbd> go to the target instead of your browser/OS (Chromium browsers).</li>
     </ul>
     <div class="callout tip">
       <span class="icon">💡</span>
-      <div class="body"><strong>Keyboard Compatible Mode:</strong> Enable in Settings if keystrokes behave incorrectly on Linux or older systems. Uses an alternate HID report format.</div>
+      <div class="body"><strong>Keyboard Compatible Mode:</strong> Enable in Settings if keystrokes behave incorrectly on Linux or older systems. Keys are tapped (pressed and released at once) instead of held; this breaks Ctrl+scroll-wheel zoom.</div>
     </div>
+
+    <h3>Pasting the Clipboard (Ctrl+V)</h3>
+    <p>With <strong>Type clipboard on Ctrl+V</strong> enabled (default), pressing <kbd>Ctrl</kbd>+<kbd>V</kbd> (<kbd>Cmd</kbd>+<kbd>V</kbd> on Mac) while controlling the target types your local clipboard text on the target. If the clipboard holds no text, a normal Ctrl+V is sent. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> is always sent as a normal keystroke. Only ASCII characters can be typed.</p>
 
     <h3>Mouse Modes</h3>
     <p>Set in <strong>Settings → Settings tab → Cursor Mode</strong>.</p>
 
     <h4>Absolute Mode (default)</h4>
-    <p>Mouse position maps directly to coordinates on the target screen. A crosshair cursor marks the active area.</p>
+    <p>Mouse position maps directly to coordinates on the target screen.</p>
     <ul class="features">
-      <li><strong>Absolute Mouse Area Width / Height:</strong> Configure what percentage of the video area maps to the target screen (0–100%). Useful when the target resolution doesn't fill the entire capture area.</li>
+      <li><strong>Absolute Mouse Area Width / Height:</strong> Configure what percentage of the video maps to the target screen (10–100%, centred). Useful when the target resolution doesn't fill the entire capture area. While Settings is open, the area is outlined in red.</li>
     </ul>
 
     <h4>Relative Mode</h4>
-    <p>Uses pointer lock — movements are captured as deltas and forwarded directly. Recommended for Linux guests where absolute positioning can be unreliable.</p>
+    <p>Uses pointer lock — movements are captured as deltas and forwarded directly. Recommended for Linux and Android targets, which may not support absolute positioning.</p>
 
     <h3>Auto Capture Mouse</h3>
     <p>When enabled (default), clicking the video immediately enters capture mode. When disabled, a confirmation dialog appears first.</p>
@@ -501,14 +541,15 @@
     <h2>Send Text</h2>
     <p>Sends a string of plain text to the target machine as a series of keystrokes.</p>
     <ol class="steps">
-      <li>Click <strong>Send Text</strong> in the action bar.</li>
+      <li>Open the <strong>Text Transfer</strong> menu in the command bar and choose <strong>Send Text...</strong>.</li>
       <li>Type or paste your text in the dialog.</li>
       <li>Press <strong>OK</strong> or <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to send.</li>
     </ol>
     <ul class="features">
-      <li>Characters are sent one at a time with a small inter-key delay.</li>
-      <li>Only ASCII characters are supported. Unsupported characters trigger a warning notification.</li>
+      <li>Characters are sent one at a time with a small inter-key delay. Line breaks are sent as Enter, tabs as Tab.</li>
+      <li>Only ASCII characters are supported. Unsupported characters are skipped and listed in a warning notification.</li>
       <li>Uppercase letters are handled automatically using Shift.</li>
+      <li>While text is being sent, a <strong>Stop Sending Text</strong> button appears in the command bar. Click it to cancel the current send and anything queued behind it. Text, hotkeys, clipboard pastes and macros share one queue, so they never mix.</li>
     </ul>
     <div class="callout tip">
       <span class="icon">💡</span>
@@ -525,13 +566,13 @@
       scripts, and repetitive tasks.
     </p>
     <ol class="steps">
-      <li>Click <strong>Send Adv. Text</strong> in the action bar.</li>
+      <li>Open the <strong>Text Transfer</strong> menu and choose <strong>Send Adv. Text (Command Key Support)...</strong>.</li>
       <li>Enter your text and commands using the escape sequence syntax below.</li>
       <li>Press <strong>OK</strong> or <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to send.</li>
     </ol>
 
     <h3>Escape Sequence Style</h3>
-    <p>Commands are wrapped in escape markers. Choose your preferred style in <strong>Settings → Settings tab → Adv. Text Escape Sequence</strong>.</p>
+    <p>Commands are wrapped in escape markers. Choose your preferred style in <strong>Settings → Macros tab → Adv. Text Escape Sequence</strong>; the setting applies to macros too.</p>
     <div class="style-cards">
       <div class="style-card active">
         <div class="label">Square (default)</div>
@@ -547,6 +588,7 @@
         <code>||ENTER||</code>
       </div>
     </div>
+    <p>Macros also accept the original <code>|||ENTER|||</code> syntax whatever style is selected. Text inside markers that is not a known command (for example a shell test <code>[[ -f file ]]</code>) is typed as written.</p>
 
     <h3>Examples</h3>
     <pre><code>Username[[TAB]]Password[[DELAY=1]][[ENTER]]
@@ -561,7 +603,7 @@ Hello[[DELAY=0.5]]World
   <!-- ══════════════════════════════════════════ -->
   <section id="hotkeys">
     <h2>Send Common Hotkeys</h2>
-    <p>Sends a single predefined key combination with one click. Select from the dropdown and press <strong>Send</strong>.</p>
+    <p>Sends a single predefined key combination with one click. Open the <strong>Send Common Hotkeys</strong> menu and pick an entry — it is sent immediately.</p>
     <table>
       <thead><tr><th>Hotkey</th><th>Common Use</th></tr></thead>
       <tbody>
@@ -586,17 +628,7 @@ Hello[[DELAY=0.5]]World
   <!-- ══════════════════════════════════════════ -->
   <section id="media-keys">
     <h2>Send Media Keys</h2>
-    <p>Control media playback and system power state on the target machine.</p>
-
-    <h3>Media Control</h3>
-    <table>
-      <thead><tr><th>Key</th><th>Action</th></tr></thead>
-      <tbody>
-        <tr><td>🔇 Mute</td><td>Toggle mute</td></tr>
-        <tr><td>🔊 Volume Up</td><td>Increase volume</td></tr>
-        <tr><td>🔉 Volume Down</td><td>Decrease volume</td></tr>
-      </tbody>
-    </table>
+    <p>Control media playback and system power state on the target machine. Open the <strong>Send Media Keys</strong> menu and pick a key — it is sent immediately.</p>
 
     <h3>ACPI Power Keys</h3>
     <table>
@@ -607,38 +639,65 @@ Hello[[DELAY=0.5]]World
         <tr><td>Power</td><td>Simulate power button press</td></tr>
       </tbody>
     </table>
+
+    <h3>Media Control</h3>
+    <table>
+      <thead><tr><th>Key</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td>🔇 Mute</td><td>Toggle mute</td></tr>
+        <tr><td>🔊 Volume Up</td><td>Increase volume</td></tr>
+        <tr><td>🔉 Volume Down</td><td>Decrease volume</td></tr>
+      </tbody>
+    </table>
   </section>
 
   <!-- ══════════════════════════════════════════ -->
   <section id="macros">
     <h2>Macros</h2>
-    <p>Macros let you save frequently used advanced text sequences and run them instantly from the action bar.</p>
+    <p>Macros let you save frequently used advanced text sequences and run them instantly from the command bar. Macros can be grouped into categories.</p>
 
     <h3>Creating a Macro</h3>
     <ol class="steps">
       <li>Open <strong>Settings → Macros tab</strong>.</li>
       <li>Click <strong>Add Macro</strong>.</li>
-      <li>Enter a name (up to 30 characters) and the macro content using <a href="#send-advanced-text">Advanced Text syntax</a>.</li>
-      <li>Click <strong>OK</strong> to save.</li>
+      <li>Enter a name (up to 30 characters), choose a <strong>Category</strong> (or Uncategorized) and enter the macro content using <a href="#send-advanced-text">Advanced Text syntax</a>.</li>
+      <li>Click <strong>Save</strong>.</li>
     </ol>
+    <p>New macros start in the category currently selected in the category filter.</p>
+
+    <h3>Categories</h3>
+    <p>Manage categories in the <strong>Categories</strong> section of the Macros tab:</p>
+    <table>
+      <thead><tr><th>Action</th><th>How</th></tr></thead>
+      <tbody>
+        <tr><td>Create</td><td>Type a name (up to 30 characters, must be unique) and click <strong>Add</strong></td></tr>
+        <tr><td>Rename</td><td>Click the pencil, edit the name, then press <kbd>Enter</kbd> or click the check mark (<kbd>Esc</kbd> cancels)</td></tr>
+        <tr><td>Delete</td><td>Click the trash icon — its macros move to <strong>Uncategorized</strong> (confirmation required if it contains macros)</td></tr>
+      </tbody>
+    </table>
 
     <h3>Running a Macro</h3>
-    <p>Select a macro from the <strong>Select Macro</strong> dropdown in the action bar and press the run button. The macro executes immediately using the same engine as Send Advanced Text.</p>
+    <p>Once the KVM is connected, a <strong>Macros</strong> menu appears in the command bar. Categories are listed as parent items (with a macro count) that open a sub-menu; uncategorized macros are listed below them. Empty categories are not shown. Select a macro to run it immediately using the same engine as Send Advanced Text.</p>
 
     <h3>Managing Macros</h3>
     <table>
       <thead><tr><th>Action</th><th>Description</th></tr></thead>
       <tbody>
-        <tr><td>Edit ✏</td><td>Modify the macro name or message</td></tr>
+        <tr><td>Edit ✏</td><td>Modify the macro name, category or message</td></tr>
         <tr><td>Delete 🗑</td><td>Remove a single macro</td></tr>
-        <tr><td>Clear All</td><td>Delete all macros (requires confirmation)</td></tr>
-        <tr><td>Import</td><td>Load macros from a <code>.json</code> file</td></tr>
-        <tr><td>Export</td><td>Save all macros to a timestamped <code>.json</code> file</td></tr>
+        <tr><td>Clear All</td><td>Delete all macros (requires confirmation; categories are kept)</td></tr>
+        <tr><td>Import</td><td>Load macros and categories from a <code>.json</code> file</td></tr>
+        <tr><td>Export</td><td>Save all macros and categories to a timestamped <code>.json</code> file</td></tr>
       </tbody>
     </table>
+    <p>Exported files are named <code>kbkvm_macros_YYYY-MM-DD_HH-mm-ss.json</code> and include the categories.</p>
+    <div class="callout warn">
+      <span class="icon">⚠</span>
+      <div class="body">Importing <strong>replaces</strong> the current macros and categories. Files exported by older versions (without categories) are imported into a category named <strong>Default</strong>. Invalid entries are skipped and reported.</div>
+    </div>
 
     <h3>Searching Macros</h3>
-    <p>Use the search box in the Macros tab to filter macros by name or message content in real time.</p>
+    <p>Use the search box in the Macros tab to filter macros by name or message content in real time. The category filter below it (All categories, a single category, or Uncategorized — each with a count) narrows the list first, and the search applies within it.</p>
 
     <h3>Example Macro</h3>
     <pre><code>Name:    Open Terminal
@@ -656,7 +715,7 @@ Message: [[WIN+L]]</code></pre>
     <h2>QR Code Scanner</h2>
     <p>Scan QR codes displayed on the target machine's screen without needing to type them manually.</p>
     <ol class="steps">
-      <li>Click the <strong>QR Scanner</strong> button (cyan icon) in the action bar.</li>
+      <li>Click the <strong>QR Code Scanner</strong> button in the command bar (shown while video is streaming).</li>
       <li>A darkened selection overlay appears over the video stream.</li>
       <li>Drag to draw a box around the QR code — the selected area shows clearly while the rest dims.</li>
       <li>Release — the app decodes the QR code and copies the result to your clipboard.</li>
@@ -665,10 +724,11 @@ Message: [[WIN+L]]</code></pre>
       <li>A notification confirms success or indicates no code was found.</li>
       <li>Press <kbd>Escape</kbd> to cancel without scanning.</li>
       <li>The hint text fades out after 2 seconds so it doesn't obscure the image.</li>
+      <li>The scan uses the full native video resolution and follows rotation/flip settings.</li>
     </ul>
     <div class="callout tip">
       <span class="icon">💡</span>
-      <div class="body"><strong>Auto-Open QR Links:</strong> Enable in Settings to automatically open scanned URLs in a new browser tab.</div>
+      <div class="body"><strong>Auto-Open QR Code Links:</strong> Enable in Settings to open a scanned URL in a new browser tab. Browsers often block tabs opened after a scan, so the link is also shown in a notification to click.</div>
     </div>
   </section>
 
@@ -677,7 +737,7 @@ Message: [[WIN+L]]</code></pre>
     <h2>OCR Text Extraction</h2>
     <p>Extract text visible on the target machine's screen using optical character recognition (Tesseract.js).</p>
     <ol class="steps">
-      <li>Click the <strong>OCR</strong> button (orange icon) in the action bar.</li>
+      <li>Click the <strong>Text Extraction (OCR)</strong> button in the command bar (shown while video is streaming).</li>
       <li>A darkened selection overlay appears over the video stream.</li>
       <li>Drag to draw a box around the text — the selected area shows clearly while the rest dims.</li>
       <li>Release — the app runs OCR and copies the extracted text to your clipboard.</li>
@@ -685,11 +745,12 @@ Message: [[WIN+L]]</code></pre>
     <ul class="features">
       <li>A notification confirms success or warns if no text was found.</li>
       <li>Press <kbd>Escape</kbd> to cancel without scanning.</li>
-      <li>Processing may take a few seconds for large areas.</li>
+      <li>The selected area is read at the full native video resolution, upright according to the rotation/flip settings.</li>
+      <li>The OCR engine and English language data are downloaded on first use; processing may take a few seconds for large areas.</li>
     </ul>
     <div class="callout tip">
       <span class="icon">💡</span>
-      <div class="body"><strong>Auto-Open OCR URLs:</strong> Enable in Settings to automatically open any URLs detected in the extracted text.</div>
+      <div class="body"><strong>Auto-Open OCR Extracted URLs:</strong> Enable in Settings to open the first URL found in the extracted text. Found URLs are also shown as clickable links in a notification.</div>
     </div>
     <div class="callout info">
       <span class="icon">ℹ</span>
@@ -705,35 +766,38 @@ Message: [[WIN+L]]</code></pre>
     <table>
       <thead><tr><th>Action</th><th>Result</th></tr></thead>
       <tbody>
-        <tr><td>Click screenshot button</td><td>Full-frame PNG of the current video</td></tr>
-        <tr><td><kbd>Shift</kbd>+Click screenshot button</td><td>Area selection — drag to capture a specific region</td></tr>
+        <tr><td>Click screenshot button</td><td>Area selection — drag to capture a specific region (<kbd>Esc</kbd> cancels)</td></tr>
+        <tr><td><kbd>Shift</kbd>+Click screenshot button</td><td>Full-frame PNG of the current video</td></tr>
       </tbody>
     </table>
-    <p>Screenshots are automatically downloaded as <code>screenshot_kbkvm_YYYY-MM-DD_HH-mm-ss.png</code>.</p>
+    <p>Screenshots are taken at the native video resolution, oriented as displayed (rotation and flips applied), and are downloaded automatically as <code>screenshot_kbkvm_YYYY-MM-DD_HH-mm-ss.png</code> (full frame) or <code>screenshot_area_kbkvm_YYYY-MM-DD_HH-mm-ss.png</code> (area).</p>
 
     <h3>Video Recording</h3>
     <ol class="steps">
-      <li>Click the <strong>Record</strong> button to start recording.</li>
+      <li>Click the <strong>Record Video</strong> button to start recording (video and, if live, audio).</li>
       <li>The button turns red and blinks while recording is active.</li>
-      <li>Click again to stop — the recording downloads automatically.</li>
+      <li>Click again to stop — the recording is saved after about a second and downloads automatically as <code>record_YYYY-MM-DD_HH-mm-ss.webm</code> (or <code>.mp4</code> where WebM isn't supported).</li>
     </ol>
+    <p>If the video stream stops while recording, the recording is saved automatically.</p>
   </section>
 
   <!-- ══════════════════════════════════════════ -->
   <section id="settings">
     <h2>Settings</h2>
-    <p>Open with the <strong>⚙ Settings</strong> button in the action bar. All settings are saved automatically and persist across sessions.</p>
+    <p>Open with the <strong>⚙ Settings</strong> button in the command bar. Close it with <kbd>Esc</kbd>, the close button, or by clicking outside. All settings are saved automatically and persist across sessions.</p>
 
     <h3>Video Tab</h3>
     <table>
       <thead><tr><th>Setting</th><th>Description</th></tr></thead>
       <tbody>
-        <tr><td>Current Resolution</td><td>Displays the active width × height @ FPS</td></tr>
+        <tr><td>Current Resolution</td><td>Displays the active width × height @ FPS (while streaming)</td></tr>
         <tr><td>Recheck Video Settings</td><td>Re-test all resolution/FPS combinations for this device</td></tr>
-        <tr><td>Resolution &amp; FPS</td><td>Select a tested, confirmed-working combination</td></tr>
-        <tr><td>Apply Resolution &amp; Frame Rate Settings</td><td>Apply the selected combination to the stream</td></tr>
+        <tr><td>Resolution &amp; Frame Rate</td><td><strong>Auto</strong> (best available, up to 1080p @ 60fps) or a tested, confirmed-working combination</td></tr>
+        <tr><td>Apply Resolution &amp; Frame Rate Settings</td><td>Apply the selected mode and restart the stream</td></tr>
+        <tr><td>Reset display settings</td><td>Rotation, flips and fit mode back to defaults</td></tr>
         <tr><td>Video Fit Mode</td><td>contain / fill / cover / none</td></tr>
-        <tr><td>Rotation</td><td>0° / 90° / −90° / 180°</td></tr>
+        <tr><td>Flip &amp; Rotate Video</td><td>Rotate: None / 90° / −90° / 180°; Flip: Mirror (left-right), Flip upside down</td></tr>
+        <tr><td>Command Bar</td><td>Docked Command Bar / Floating Command Bar</td></tr>
       </tbody>
     </table>
 
@@ -741,20 +805,30 @@ Message: [[WIN+L]]</code></pre>
     <table>
       <thead><tr><th>Setting</th><th>Description</th></tr></thead>
       <tbody>
+        <tr><td>Enable KVM keyboard &amp; mouse control</td><td>Turn off to use the app as a plain capture-card viewer</td></tr>
         <tr><td>Baud Rate</td><td>9600 / 57600 / 115200 — must match adapter firmware</td></tr>
-        <tr><td>Keyboard Compatible Mode</td><td>Alternate HID format for Linux and older systems</td></tr>
-        <tr><td>Auto Capture Mouse</td><td>Capture mouse on click without a confirmation prompt</td></tr>
+        <tr><td>Keyboard Compatible Mode</td><td>Tap keys instead of holding them, for Linux and older systems</td></tr>
+        <tr><td>Type clipboard on Ctrl+V</td><td><kbd>Ctrl</kbd>+<kbd>V</kbd> (<kbd>Cmd</kbd>+<kbd>V</kbd> on Mac) types the local clipboard on the target (default on)</td></tr>
         <tr><td>Auto-Open QR Code Links</td><td>Open scanned QR code URLs automatically in a new tab</td></tr>
         <tr><td>Auto-Open OCR Extracted URLs</td><td>Open URLs found in extracted OCR text automatically</td></tr>
-        <tr><td>Adv. Text Escape Sequence</td><td>Choose delimiter style: <code>[[ ]]</code>, <code>{{ }}</code>, or <code>|| ||</code></td></tr>
-        <tr><td>Cursor Mode</td><td>absolute (default) or relative</td></tr>
-        <tr><td>Absolute Mouse Area Width</td><td>Percentage of video width that maps to the target (0–100%)</td></tr>
-        <tr><td>Absolute Mouse Area Height</td><td>Percentage of video height that maps to the target (0–100%)</td></tr>
+        <tr><td>Auto Capture Mouse</td><td>Capture mouse on click without a confirmation prompt</td></tr>
+        <tr><td>Cursor Mode</td><td>relative or absolute (default)</td></tr>
+        <tr><td>Width / Height</td><td>Absolute mouse area as a percentage of the video (10–100%, absolute mode only)</td></tr>
       </tbody>
     </table>
 
     <h3>Macros Tab</h3>
-    <p>Full macro management — see the <a href="#macros">Macros</a> section for details.</p>
+    <p>Full macro management — see the <a href="#macros">Macros</a> section for details. Also contains the <strong>Adv. Text Escape Sequence</strong> setting: <code>[[ ]]</code>, <code>{{ }}</code>, or <code>|| ||</code>.</p>
+
+    <h3>Advanced Tab</h3>
+    <table>
+      <thead><tr><th>Setting</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>Reset Video &amp; Audio Devices</td><td>Stops the stream and clears saved device selections, the chosen resolution and the tested-capabilities cache</td></tr>
+        <tr><td>Reset All Settings</td><td>Restores every setting to its default (requires confirmation). Device selections and macros are kept</td></tr>
+        <tr><td>About</td><td>Shows the app version, build date and edition (Web app or Desktop app)</td></tr>
+      </tbody>
+    </table>
   </section>
 
   <!-- ══════════════════════════════════════════ -->
@@ -775,21 +849,22 @@ Message: [[WIN+L]]</code></pre>
     <table>
       <thead><tr><th>Command</th><th>Key</th></tr></thead>
       <tbody>
-        <tr><td><code>ENTER</code></td><td>Return</td></tr>
+        <tr><td><code>ENTER</code> · <code>RETURN</code></td><td>Return</td></tr>
         <tr><td><code>ESCAPE</code> · <code>ESC</code></td><td>Escape</td></tr>
         <tr><td><code>TAB</code></td><td>Tab</td></tr>
         <tr><td><code>SPACE</code></td><td>Space bar</td></tr>
         <tr><td><code>BACKSPACE</code></td><td>Backspace</td></tr>
         <tr><td><code>DELETE</code> · <code>DEL</code></td><td>Delete</td></tr>
-        <tr><td><code>INSERT</code></td><td>Insert</td></tr>
+        <tr><td><code>INSERT</code> · <code>INS</code></td><td>Insert</td></tr>
         <tr><td><code>HOME</code></td><td>Home</td></tr>
         <tr><td><code>END</code></td><td>End</td></tr>
-        <tr><td><code>PAGEUP</code></td><td>Page Up</td></tr>
-        <tr><td><code>PAGEDOWN</code></td><td>Page Down</td></tr>
+        <tr><td><code>PAGEUP</code> · <code>PGUP</code></td><td>Page Up</td></tr>
+        <tr><td><code>PAGEDOWN</code> · <code>PGDN</code></td><td>Page Down</td></tr>
         <tr><td><code>UP</code> · <code>ARROWUP</code></td><td>↑ Arrow</td></tr>
         <tr><td><code>DOWN</code> · <code>ARROWDOWN</code></td><td>↓ Arrow</td></tr>
         <tr><td><code>LEFT</code> · <code>ARROWLEFT</code></td><td>← Arrow</td></tr>
         <tr><td><code>RIGHT</code> · <code>ARROWRIGHT</code></td><td>→ Arrow</td></tr>
+        <tr><td><code>MENU</code> · <code>APPS</code> · <code>CONTEXTMENU</code></td><td>Context menu key</td></tr>
       </tbody>
     </table>
 
@@ -799,6 +874,7 @@ Message: [[WIN+L]]</code></pre>
       <code>F5</code><code>F6</code><code>F7</code><code>F8</code>
       <code>F9</code><code>F10</code><code>F11</code><code>F12</code>
     </div>
+    <p><code>F13</code> to <code>F24</code> are also supported.</p>
 
     <h3>Lock &amp; System Keys</h3>
     <table>
@@ -808,18 +884,23 @@ Message: [[WIN+L]]</code></pre>
         <tr><td><code>NUMLOCK</code></td><td>Num Lock</td></tr>
         <tr><td><code>SCROLLLOCK</code></td><td>Scroll Lock</td></tr>
         <tr><td><code>PAUSE</code></td><td>Pause / Break</td></tr>
+        <tr><td><code>PRINTSCREEN</code> · <code>PRTSC</code></td><td>Print Screen</td></tr>
       </tbody>
     </table>
 
     <h3>Modifier Combinations</h3>
-    <p>Combine modifiers and a key using <code>+</code>. Multiple modifiers are supported.</p>
+    <p>Combine modifiers and a key using <code>+</code>. Multiple modifiers are supported, and any single character key can be used (e.g. <code>CTRL+C</code>, <code>WIN+R</code>).</p>
     <table>
       <thead><tr><th>Modifier</th><th>Aliases</th></tr></thead>
       <tbody>
         <tr><td><code>CTRL</code></td><td><code>CONTROL</code></td></tr>
         <tr><td><code>SHIFT</code></td><td>—</td></tr>
-        <tr><td><code>ALT</code></td><td>—</td></tr>
-        <tr><td><code>WIN</code></td><td><code>META</code> · <code>CMD</code></td></tr>
+        <tr><td><code>ALT</code></td><td><code>OPTION</code></td></tr>
+        <tr><td><code>WIN</code></td><td><code>META</code> · <code>CMD</code> · <code>GUI</code> · <code>SUPER</code></td></tr>
+        <tr><td><code>RCTRL</code></td><td>Right Ctrl</td></tr>
+        <tr><td><code>RSHIFT</code></td><td>Right Shift</td></tr>
+        <tr><td><code>RALT</code></td><td><code>ALTGR</code> (Right Alt)</td></tr>
+        <tr><td><code>RWIN</code></td><td><code>RMETA</code> (Right Win)</td></tr>
       </tbody>
     </table>
 

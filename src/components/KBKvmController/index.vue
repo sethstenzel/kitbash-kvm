@@ -594,7 +594,7 @@ onBeforeUnmount(() => {
                 class="btn-no-style"
                 @click="handleScreenshot($event)"
                 :disabled="!isStreaming"
-                title="Screenshot (Shift+Click for area)"
+                title="Area Screenshot (Shift+Click for full screen)"
               >
                 <KbIcon name="screenshot" />
               </button>

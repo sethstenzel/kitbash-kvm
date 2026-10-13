@@ -12,6 +12,8 @@ node_modules/
 # Project uses yarn (yarn.lock); don't commit an npm lockfile
 package-lock.json
 dist/
+# Tauri desktop build output (kept apart from the web build in dist/)
+dist-tauri/
 dist-ssr
 build/
 .vite/

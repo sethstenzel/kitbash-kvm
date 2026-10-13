@@ -258,8 +258,18 @@ const tapKey = (code: string) =>
     ...keyboardPacket(modifierByte(), pressedHidCodes()),
   ])
 
+// While the pointer is on the command bar (or one of its menus is open) keys belong to the app,
+// e.g. holding Shift to Shift+click a toolbar button must not reach the target or hide the bar.
+// Keyups are still handled, so a key held before moving onto the bar is released on the target.
+const isPointerOnCommandBar = () => !!document.querySelector('.action-bar:hover, .action-dropdown-menu')
+
 const handleKeydown = (event: KeyboardEvent) => {
-  if (!isForwardingKeyboard() || event.isComposing || event.keyCode === 229) {
+  if (
+    !isForwardingKeyboard() ||
+    event.isComposing ||
+    event.keyCode === 229 ||
+    isPointerOnCommandBar()
+  ) {
     return
   }
   emit('menu-close')

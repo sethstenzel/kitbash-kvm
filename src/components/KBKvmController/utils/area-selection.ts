@@ -52,7 +52,7 @@ export const selectArea = (
       width: ${Math.max(0, right - left)}px;
       height: ${Math.max(0, bottom - top)}px;
       background: rgba(0, 0, 0, 0.5);
-      cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="none" stroke="${cursorColor}" stroke-width="2" d="M12 2v20M2 12h20"/></svg>') 12 12, crosshair;
+      cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="none" stroke="white" stroke-width="4" d="M12 2v20M2 12h20"/><path fill="none" stroke="${cursorColor}" stroke-width="2" d="M12 2v20M2 12h20"/></svg>') 12 12, crosshair;
       z-index: 9999;
       user-select: none;
     `
@@ -65,12 +65,14 @@ export const selectArea = (
       pointer-events: none;
       box-sizing: border-box;
     `
+    // White hairline keeps dark accent colors (e.g. the logo navy) visible on dark video
+    const hairline = '0 0 0 1px rgba(255, 255, 255, 0.75)'
     if (spotlight) {
       selectionBox.style.background = 'transparent'
-      selectionBox.style.boxShadow = `0 0 0 9999px rgba(0, 0, 0, 0.5), 0 0 10px ${color}`
+      selectionBox.style.boxShadow = `${hairline}, 0 0 0 9999px rgba(0, 0, 0, 0.5), 0 0 10px ${color}`
     } else {
-      selectionBox.style.background = `color-mix(in srgb, ${color} 10%, transparent)`
-      selectionBox.style.boxShadow = `0 0 10px ${color}`
+      selectionBox.style.background = `color-mix(in srgb, ${color} 18%, transparent)`
+      selectionBox.style.boxShadow = `${hairline}, 0 0 10px ${color}`
     }
 
     const hint = document.createElement('div')

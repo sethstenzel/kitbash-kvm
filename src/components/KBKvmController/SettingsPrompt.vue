@@ -6,6 +6,8 @@ import {DEFAULT_VIDEO_MODE, type IStreamInfo} from '@/components/KBKvmController
 import {useMacrosStore, parseMacrosFile, CATEGORY_NAME_MAX_LENGTH, type IMacro, type IMacroCategory} from '@/stores/macros'
 import MacroDialog from '@/components/MacroDialog/MacroDialog.vue'
 import KbSelect from '@/components/KBKvmController/UI/KbSelect.vue'
+import {getVersion, isTauri} from '@/utils'
+import {displayTimestamp} from '@/utils/format-date'
 import {downloadUrl} from '@/components/KBKvmController/utils'
 import {fileTimestamp} from '@/utils/format-date'
 
@@ -132,6 +134,10 @@ watch(
 )
 
 const panelRef = ref<HTMLElement>()
+// About (Advanced tab); the version comes from package.json, which also versions the installers
+const appVersion = getVersion()
+const buildDate = BUILD_TIMESTAMP ? displayTimestamp(new Date(BUILD_TIMESTAMP)) : 'Unknown'
+
 const activeTab = ref<'video' | 'settings' | 'macros' | 'advanced'>('video')
 
 const resetDeviceData = () => {
@@ -930,6 +936,29 @@ const handleImportMacros = () => {
                     Reset Settings
                   </button>
                 </div>
+              </div>
+            </div>
+
+            <div class="tab-col">
+              <div class="settings-section">
+                <div class="section-header">
+                  <span class="mdi mdi-information-outline"></span>
+                  <h3>About</h3>
+                </div>
+                <dl class="about-list">
+                  <div class="about-row">
+                    <dt>Version</dt>
+                    <dd>{{ appVersion }}</dd>
+                  </div>
+                  <div class="about-row">
+                    <dt>Built</dt>
+                    <dd>{{ buildDate }}</dd>
+                  </div>
+                  <div class="about-row">
+                    <dt>Edition</dt>
+                    <dd>{{ isTauri ? 'Desktop app' : 'Web app' }}</dd>
+                  </div>
+                </dl>
               </div>
             </div>
           </div>
@@ -2044,6 +2073,30 @@ const handleImportMacros = () => {
 }
 
 // Advanced Tab Styles
+.about-list {
+  margin: 0;
+
+  .about-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  dt {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  dd {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.92);
+  }
+}
+
 .advanced-row {
   display: flex;
   align-items: center;

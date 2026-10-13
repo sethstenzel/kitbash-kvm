@@ -24,12 +24,12 @@ export function useScreenshot(videoRef: Ref<HTMLVideoElement | undefined>) {
       return
     }
 
-    // Shift+Click selects an area, plain click captures the full frame
+    // Plain click selects an area, Shift+Click captures the full frame
     if (event?.shiftKey) {
-      captureArea(video)
-    } else {
       const canvas = snapVideoImage(video, getVideoOrientation(settingsStore))
       downloadCanvas(canvas, `screenshot_kbkvm_${fileTimestamp()}.png`)
+    } else {
+      captureArea(video)
     }
   }
 
@@ -38,8 +38,10 @@ export function useScreenshot(videoRef: Ref<HTMLVideoElement | undefined>) {
     isSelectingArea.value = true
     try {
       const rect = await selectArea(video, {
-        color: '#00ff00',
+        color: '#004264', // command bar / menu blue
         hint: 'Click and drag to select area (ESC to cancel)',
+        // Only the outside is dimmed, so the area being captured is shown exactly as it will be saved
+        spotlight: true,
       })
       if (!rect) return
       const region = clientRectToVideoRegion(video, rect.x1, rect.y1, rect.x2, rect.y2)

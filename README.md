@@ -9,8 +9,10 @@ KitBash KVM let's you use your laptop screen, mouse, and keyboard on another mac
 I will be keeping built devices and kits on my tindie store.
 
 ## How to use?
-Plug in a USBC cable to your laptop, and then one USBC cable and one HDMI cable to the machine you wish to controlling.
-Next choose to either use the installationless Google Chrome Web Controller, or download a native Windows client from the Microsoft Store.
+Plug in a USBC cable to your laptop, and then one USBC cable and one HDMI cable to the machine you wish to control.
+Next choose to either use the installationless Web Controller at [controller.kitbashkvm.com](https://controller.kitbashkvm.com) in Google Chrome or Microsoft Edge, or download a native Windows client from the Microsoft Store.
+
+See the [User Guide](docs/wiki.md) for how to use the controller, and [BUILD.md](BUILD.md) to build it yourself.
 
 ## Can I make my own?
 ABSOLUTELY! Wiki instructions here on GitHub will detail how to build or use alternative parts.

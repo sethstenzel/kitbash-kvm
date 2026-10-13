@@ -2,14 +2,14 @@
   "$schema": "../node_modules/@tauri-apps/cli/schema.json",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "npm run build -- --outDir dist-tauri",
     "devPath": "http://localhost:8087",
-    "distDir": "../dist",
+    "distDir": "../dist-tauri",
     "withGlobalTauri": false
   },
   "package": {
     "productName": "KitBash KVM Controller",
-    "version": "0.1.0"
+    "version": "../package.json"
   },
   "tauri": {
     "allowlist": {
