@@ -424,7 +424,9 @@
     <p>The <strong>Video Only Mode</strong> button hides the command bar and stops forwarding keyboard and mouse input, so you can simply watch the target. Press <kbd>Esc</kbd> to exit.</p>
 
     <h3>Fullscreen &amp; Desktop Controls</h3>
-    <p>In the browser, the <strong>Fullscreen</strong> button (or double-clicking the video while the mouse isn't captured) toggles fullscreen. When running as a desktop app, two buttons are shown instead:</p>
+    <p>In the browser, the <strong>Fullscreen</strong> button (or double-clicking the video while the mouse isn't captured) toggles fullscreen.</p>
+    <p><strong>Fullscreen needs the KVM connected</strong> (except in <strong>Video Only Mode</strong>, or when KVM control is turned off in Settings). Clicking Fullscreen while the KVM isn't connected keeps the window as it is and starts connecting instead; once it's connected, click Fullscreen again. This avoids Chrome's serial port chooser appearing during fullscreen, which forces the page out of fullscreen and blocks fullscreen while it's open.</p>
+    <p>When running as a desktop app, two buttons are shown instead:</p>
     <table>
       <thead><tr><th>Button</th><th>Function</th></tr></thead>
       <tbody>
@@ -506,6 +508,7 @@
       <li>Click <strong>Connect KVM (Serial)</strong> in the command bar and select the adapter's port.</li>
     </ol>
     <p>After connecting, the app asks the chip for its info. If it does not answer, a warning says the baud rate may be wrong. Changing the baud rate while connected closes the connection; connect again afterwards.</p>
+    <p>Once you've picked the KVM's port, later connections (including clicking the video to start controlling) reopen it <strong>without the port chooser</strong> for as long as Chrome remembers the permission. For adapters without a USB serial number, such as the CH340 in the KitBash KVM, Chrome only remembers it until the browser is closed or the KVM is unplugged, so the chooser appears once per browser session. Because Chrome leaves fullscreen to show the chooser, fullscreen requires the KVM to be connected first (see Fullscreen &amp; Desktop Controls).</p>
     <div class="callout warn">
       <span class="icon">⚠</span>
       <div class="body">If the adapter is unplugged or the connection fails, all keys and buttons are released, a <strong>KVM serial device disconnected</strong> warning appears and the connect button returns. Click <strong>Disconnect KVM (Serial)</strong> to close the connection yourself.</div>

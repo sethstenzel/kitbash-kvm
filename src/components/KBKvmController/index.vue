@@ -30,6 +30,7 @@ import {isPromptVisible} from '@/components/PromptInput/prompt-input'
 import {eventBus} from '@/utils/event-bus'
 import {isTauri} from '@/utils'
 import {findKnownCaptureDevices} from '@/components/KBKvmController/utils/known-devices'
+import {setFullscreenEnterGuard} from '@/components/KBKvmController/utils/app-fullscreen'
 import {useSerialState} from '@/components/KBKvmController/utils/serial-state'
 
 const settingsStore = useSettingsStore()
@@ -425,6 +426,37 @@ const handleRootClick = () => {
 /**
  * Enter KVM control mode
  */
+/**
+ * Fullscreen needs the KVM connected first (unless only viewing). Connecting may open Chrome's
+ * serial port chooser, which forces the page out of fullscreen and blocks fullscreen while open,
+ * so it must happen before fullscreen, never during it.
+ */
+let connectingForFullscreen = false
+setFullscreenEnterGuard(() => {
+  if (serialPort.value || isVideoOnlyMode.value || !settingsStore.enableKvmInput) {
+    return true
+  }
+  window.$notification({
+    type: 'info',
+    message: 'Connect the KVM before going fullscreen (Video Only Mode can go fullscreen without it).',
+    timeout: 5000,
+  })
+  // Same click: Chrome only shows the port chooser in response to one. Control isn't started
+  // on connect, so the bar stays visible for the Fullscreen click that follows.
+  connectingForFullscreen = true
+  void kvmInputRef.value
+    ?.connectSerial?.()
+    .then(() => {
+      if (serialPort.value) {
+        isShowFloatBar.value = true
+        window.$notification({type: 'success', message: 'KVM connected. Click Fullscreen to continue.', timeout: 5000})
+      }
+    })
+    .finally(() => (connectingForFullscreen = false))
+  return false
+})
+onBeforeUnmount(() => setFullscreenEnterGuard(null))
+
 const enterInputMode = async () => {
   if (!kvmInputRef.value) {
     return
@@ -652,7 +684,7 @@ onBeforeUnmount(() => {
             class="action-bar-side right"
           >
             <template v-if="settingsStore.enableKvmInput">
-              <KBKvmInput ref="kvmInputRef" :videoOnlyMode="isVideoOnlyMode" @connected="enterInputMode" @menu-close="isShowFloatBar = false" @menu-open="isShowFloatBar = true" />
+              <KBKvmInput ref="kvmInputRef" :videoOnlyMode="isVideoOnlyMode" @connected="!connectingForFullscreen && enterInputMode()" @menu-close="isShowFloatBar = false" @menu-open="isShowFloatBar = true" />
               <template v-if="serialPort">
                 <div class="menu-separator"></div>
                 <MacrosMenu />

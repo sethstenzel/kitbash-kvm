@@ -32,6 +32,8 @@ interface ISettings {
   floatUI: boolean
   enableKvmInput: boolean
   baudRate: string
+  // USB ids of the last KVM serial port, to reopen it without the browser's port chooser
+  lastSerialPort: {usbVendorId?: number; usbProductId?: number} | null
   // Mouse positioning mode, recommended to enable relative mode under Linux guest
   cursorMode: 'relative' | 'absolute'
   absMouseAreaHeight: number
@@ -71,6 +73,7 @@ export const useSettingsStore = defineStore('settingsStore', {
       floatUI: true,
       enableKvmInput: true,
       baudRate: '',
+      lastSerialPort: null,
       cursorMode: 'absolute',
       absMouseAreaHeight: 100,
       absMouseAreaWidth: 100,
@@ -137,6 +140,7 @@ export const useSettingsStore = defineStore('settingsStore', {
       'floatUI',
       'enableKvmInput',
       'baudRate',
+      'lastSerialPort',
       'cursorMode',
       'absMouseAreaHeight',
       'absMouseAreaWidth',

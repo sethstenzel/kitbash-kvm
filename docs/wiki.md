@@ -96,7 +96,11 @@ The **Video Only Mode** button hides the command bar and stops forwarding keyboa
 
 ### Fullscreen & Desktop Controls
 
-In the browser, the **Fullscreen** button (or double-clicking the video while the mouse isn't captured) toggles fullscreen. When running as a desktop app, two buttons are shown instead:
+In the browser, the **Fullscreen** button (or double-clicking the video while the mouse isn't captured) toggles fullscreen.
+
+**Fullscreen needs the KVM connected** (except in **Video Only Mode**, or when KVM control is turned off in Settings). Clicking Fullscreen while the KVM isn't connected keeps the window as it is and starts connecting instead; once it's connected, click Fullscreen again. This avoids Chrome's serial port chooser appearing during fullscreen, which forces the page out of fullscreen and blocks fullscreen while it's open.
+
+When running as a desktop app, two buttons are shown instead:
 
 | Button | Function |
 |--------|----------|
@@ -169,6 +173,8 @@ Mouse input, screenshots, OCR and QR scans all follow the rotation and flips. **
 2. Click **Connect KVM (Serial)** in the command bar and select the adapter's port.
 
 After connecting, the app asks the chip for its info. If it does not answer, a warning says the baud rate may be wrong. Changing the baud rate while connected closes the connection; connect again afterwards.
+
+Once you've picked the KVM's port, later connections (including clicking the video to start controlling) reopen it **without the port chooser** for as long as Chrome remembers the permission. For adapters without a USB serial number, such as the CH340 in the KitBash KVM, Chrome only remembers it until the browser is closed or the KVM is unplugged, so the chooser appears once per browser session. Because Chrome leaves fullscreen to show the chooser, fullscreen requires the KVM to be connected first (see [Fullscreen & Desktop Controls](#fullscreen--desktop-controls)).
 
 If the adapter is unplugged or the connection fails, all keys and buttons are released, a **KVM serial device disconnected** warning appears and the connect button returns. Click **Disconnect KVM (Serial)** to close the connection yourself.
 

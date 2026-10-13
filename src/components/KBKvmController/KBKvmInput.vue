@@ -51,19 +51,68 @@ const props = defineProps<{videoOnlyMode?: boolean}>()
 const emit = defineEmits(['connected', 'disconnected', 'menu-close', 'menu-open'])
 
 const settingsStore = useSettingsStore()
-const {serialPort} = useSerialState()
+const {serialPort, isChoosingPort} = useSerialState()
 const rootRef = ref<HTMLElement>()
 
 /* ---------------- Serial connection ---------------- */
 
+/**
+ * A port this site was already allowed to use: the only one, or the one matching the last KVM.
+ * Opening it needs no chooser, which matters because Chrome leaves fullscreen to show the chooser
+ * and refuses fullscreen while it's open.
+ */
+const findKnownSerialPort = async (): Promise<ISerialPortLike | null> => {
+  const ports = (await navigator.serial?.getPorts?.()) ?? []
+  if (ports.length === 1) {
+    return ports[0]
+  }
+  const last = settingsStore.lastSerialPort
+  const matches = last
+    ? ports.filter((p) => {
+        const info = p.getInfo()
+        return info.usbVendorId === last.usbVendorId && info.usbProductId === last.usbProductId
+      })
+    : []
+  return matches.length === 1 ? matches[0] : null
+}
+
+/** Show the browser's port chooser, then return to fullscreen if it pulled us out of it */
+const choosePortWithChooser = async () => {
+  const wasFullscreen = !!document.fullscreenElement
+  if (wasFullscreen) {
+    // Adapters without a USB serial number (e.g. the CH340) are only remembered for the session
+    window.$notification({
+      type: 'info',
+      message:
+        "Chrome is leaving fullscreen so you can pick the KVM's serial port (needed once per browser session for this adapter).",
+      timeout: 6000,
+    })
+  }
+  isChoosingPort.value = true
+  try {
+    return await navigator.serial!.requestPort()
+  } finally {
+    isChoosingPort.value = false
+    if (wasFullscreen && !document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() =>
+        window.$notification({
+          type: 'info',
+          message: 'Chrome left fullscreen to show the port chooser. Click Fullscreen to go back.',
+          timeout: 5000,
+        }),
+      )
+    }
+  }
+}
+
 const initSerial = async () => {
-  if (serialPort.value) {
+  if (serialPort.value || isChoosingPort.value) {
     return
   }
   try {
     let port: ISerialPortLike | null = null
     if (navigator.serial?.requestPort) {
-      port = await navigator.serial.requestPort()
+      port = (await findKnownSerialPort()) ?? (await choosePortWithChooser())
     } else if (navigator.usb?.requestDevice) {
       // todo: using polyfill  `Failed to execute 'open' on 'USBDevice': Access denied.`
       const serialPolyfill = import('web-serial-polyfill')
@@ -80,6 +129,10 @@ const initSerial = async () => {
     settingsStore.baudRate = baudRate
 
     await openSerial(port, +baudRate)
+    const info = port.getInfo?.()
+    if (info?.usbVendorId !== undefined) {
+      settingsStore.lastSerialPort = {usbVendorId: info.usbVendorId, usbProductId: info.usbProductId}
+    }
     emit('connected', port)
   } catch (error: any) {
     // The user dismissed the port chooser
@@ -764,6 +817,8 @@ const isCaptured = () =>
 defineExpose({
   autoEnable,
   isCaptured,
+  // Connect the KVM serial port (opens the port chooser when needed); resolves when done
+  connectSerial: initSerial,
 })
 
 /* ---------------- Toolbar actions ---------------- */

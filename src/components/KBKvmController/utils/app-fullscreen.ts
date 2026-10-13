@@ -1,6 +1,7 @@
 import {effectScope, ref, type Ref} from 'vue'
 import {useFullscreen} from '@vueuse/core'
 import {isTauri} from '@/utils'
+import {useSerialState} from '@/components/KBKvmController/utils/serial-state'
 
 interface IAppFullscreen {
   isFullscreen: Ref<boolean>
@@ -9,13 +10,24 @@ interface IAppFullscreen {
 
 let instance: IAppFullscreen | null = null
 
+// Checked before entering (never before leaving) fullscreen; returns false to stay windowed and
+// is responsible for telling the user why
+let enterGuard: (() => boolean) | null = null
+export const setFullscreenEnterGuard = (guard: (() => boolean) | null) => {
+  enterGuard = guard
+}
+const isEnterBlocked = (isFullscreen: boolean) => !isFullscreen && !!enterGuard && !enterGuard()
+
 const notifyFailure = (error: unknown) => {
   console.error('[fullscreen] toggle failed:', error)
-  window.$notification({
-    type: 'error',
-    message: `Fullscreen failed: ${(error as Error)?.message ?? error}`,
-    timeout: 4000,
-  })
+  const reason = String((error as Error)?.message ?? error)
+  // Chrome's "not granted": fullscreen is refused while browser UI such as a chooser is open
+  const message = !/not granted/i.test(reason)
+    ? `Fullscreen failed: ${reason}`
+    : useSerialState().isChoosingPort.value
+      ? "Chrome won't go fullscreen while the serial port chooser is open. Pick the KVM's port (or cancel it), then try again."
+      : 'Chrome refused fullscreen, usually because a browser dialog is open. Close it and try again.'
+  window.$notification({type: 'warning', message, timeout: 6000})
 }
 
 /** Desktop app: the window itself goes fullscreen through Tauri */
@@ -34,7 +46,9 @@ const createTauriFullscreen = (): IAppFullscreen => {
   const toggle = async () => {
     try {
       const w = await appWindow
-      await w.setFullscreen(!(await w.isFullscreen()))
+      const isFullscreenNow = await w.isFullscreen()
+      if (isEnterBlocked(isFullscreenNow)) return
+      await w.setFullscreen(!isFullscreenNow)
       await sync()
     } catch (error) {
       notifyFailure(error)
@@ -50,6 +64,7 @@ const createTauriFullscreen = (): IAppFullscreen => {
 const createBrowserFullscreen = (): IAppFullscreen => {
   const {isFullscreen, toggle: vueuseToggle} = useFullscreen(document.documentElement)
   const toggle = async () => {
+    if (isEnterBlocked(isFullscreen.value)) return
     try {
       await vueuseToggle()
     } catch (error) {

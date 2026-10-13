@@ -5,6 +5,30 @@ Versions follow [Semantic Versioning](https://semver.org/): **MAJOR** for breaki
 **MINOR** for new features, **PATCH** for fixes. The version lives in `package.json` and is
 used by the web app (Settings > Advanced > About) and the desktop installers.
 
+## [2.4.0] - 2026-10-13
+
+### Changed
+- Fullscreen requires the KVM serial connection, except in Video Only Mode or with KVM control
+  turned off. Clicking Fullscreen (or double-clicking the video) while disconnected stays windowed,
+  explains why and starts connecting; after connecting, control isn't started automatically so the
+  bar stays available, and a notification says to click Fullscreen. This keeps Chrome's serial port
+  chooser (which forces the page out of fullscreen and blocks it while open) out of fullscreen
+  entirely. Applies to the web and desktop apps; tested on a KitBash KVM (CH340, USB2 capture card).
+
+## [2.3.3] - 2026-10-13
+
+### Fixed
+- Browser: clicking the video to start controlling dropped out of fullscreen, and fullscreen then
+  failed with "not granted". The cause was Chrome's serial port chooser (Chrome leaves fullscreen
+  to show it and refuses fullscreen while it's open). A port the site was already allowed to use
+  is now reopened without the chooser (the only allowed port, or the one matching the last KVM's
+  USB ids), the app returns to fullscreen after the chooser when Chrome allows it, and the
+  "not granted" error is explained in plain words. Adapters without a USB serial number (like the
+  KVM's CH340) are only remembered by Chrome for the browser session, so the chooser still appears
+  once per session; when that happens from fullscreen, a notification explains it first.
+- Audio opened Chrome's "Default - …" alias instead of the chosen capture-card input, so it would
+  follow the Windows default device. The audio device is now requested by its exact id.
+
 ## [2.3.2] - 2026-10-13
 
 ### Fixed

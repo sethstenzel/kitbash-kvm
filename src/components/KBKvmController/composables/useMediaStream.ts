@@ -98,7 +98,9 @@ export function useMediaStream(options: UseMediaStreamOptions) {
 
       const audio: MediaTrackConstraints | false = audioAvailable
         ? {
-            deviceId: audioId,
+            // exact: as a mere preference Chrome may open the "default" alias of the same device,
+            // which then follows the OS default input instead of the chosen one
+            deviceId: {exact: audioId},
             autoGainControl: false,
             echoCancellation: false,
             noiseSuppression: false,
