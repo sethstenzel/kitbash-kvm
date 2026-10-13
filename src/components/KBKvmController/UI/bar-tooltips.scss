@@ -1,0 +1,59 @@
+// Command bar tooltips (see bar-tooltips.ts): a deeper shade of the logo blue with a pointer arrow
+.kb-tooltip {
+  --tip-bg: #00324c;
+  --tip-border: rgba(255, 255, 255, 0.16);
+
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 10000;
+  max-width: 260px;
+  padding: 6px 10px;
+  border: 1px solid var(--tip-border);
+  border-radius: 7px;
+  background: var(--tip-bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  color: #f4f7fa;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-3px);
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
+
+  &[data-side='top'] {
+    transform: translateY(3px);
+  }
+
+  &.visible {
+    opacity: 1;
+    transform: none;
+  }
+
+  // Arrow pointing at the button
+  &::before {
+    content: '';
+    position: absolute;
+    left: var(--arrow-x, 50%);
+    top: -5px;
+    width: 8px;
+    height: 8px;
+    background: var(--tip-bg);
+    border-left: 1px solid var(--tip-border);
+    border-top: 1px solid var(--tip-border);
+    transform: translateX(-50%) rotate(45deg);
+  }
+
+  &[data-side='top']::before {
+    top: auto;
+    bottom: -5px;
+    border: none;
+    border-right: 1px solid var(--tip-border);
+    border-bottom: 1px solid var(--tip-border);
+  }
+}

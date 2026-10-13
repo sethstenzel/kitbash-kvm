@@ -1,24 +1,33 @@
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue'
 import {useVModel} from '@vueuse/core'
-import type {IMacro} from '@/stores/macros'
+import {useMacrosStore, MACRO_NAME_MAX_LENGTH, type IMacro} from '@/stores/macros'
 import {useSettingsStore} from '@/stores/settings'
+import KbSelect from '@/components/KBKvmController/UI/KbSelect.vue'
 import {getEscapeMarkers} from '@/components/KBKvmController/utils/send-text'
 
 interface Props {
   visible: boolean
   macro?: IMacro | null
+  // Category preselected for a new macro ('' = uncategorized)
+  defaultCategoryId?: string
 }
 
 const emit = defineEmits(['update:visible', 'save'])
 const props = withDefaults(defineProps<Props>(), {
   visible: false,
   macro: null,
+  defaultCategoryId: '',
 })
 
 const mVisible = useVModel(props, 'visible', emit)
 
 const settingsStore = useSettingsStore()
+const macrosStore = useMacrosStore()
+const categoryOptions = computed(() => [
+  {value: '', label: 'Uncategorized'},
+  ...macrosStore.categories.map((c) => ({value: c.id, label: c.name})),
+])
 // Wrap a command in the configured escape markers, e.g. cmd('ENTER') -> '[[ENTER]]'
 const cmd = computed(() => {
   const [open, close] = getEscapeMarkers(settingsStore.advancedTextEscapeStyle)
@@ -27,6 +36,7 @@ const cmd = computed(() => {
 
 const macroName = ref('')
 const macroMessage = ref('')
+const macroCategoryId = ref('')
 const nameError = ref('')
 
 watch(mVisible, (val) => {
@@ -35,10 +45,12 @@ watch(mVisible, (val) => {
       // Editing existing macro
       macroName.value = props.macro.name
       macroMessage.value = props.macro.message
+      macroCategoryId.value = props.macro.categoryId ?? ''
     } else {
       // Creating new macro
       macroName.value = ''
       macroMessage.value = ''
+      macroCategoryId.value = props.defaultCategoryId
     }
     nameError.value = ''
   }
@@ -50,8 +62,8 @@ const validateName = () => {
     nameError.value = 'Name is required'
     return false
   }
-  if (macroName.value.length > 30) {
-    nameError.value = 'Name must be 30 characters or less'
+  if (macroName.value.length > MACRO_NAME_MAX_LENGTH) {
+    nameError.value = `Name must be ${MACRO_NAME_MAX_LENGTH} characters or less`
     return false
   }
   return true
@@ -73,6 +85,8 @@ const handleSave = () => {
   emit('save', {
     name: macroName.value.trim(),
     message: macroMessage.value,
+    // The chosen category may have been deleted meanwhile
+    categoryId: macrosStore.categoryById(macroCategoryId.value)?.id,
   })
   mVisible.value = false
 }
@@ -115,6 +129,14 @@ const handleCancel = () => {
               @input="validateName"
             />
             <span v-if="nameError" class="error-message">{{ nameError }}</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">
+              <span class="mdi mdi-folder-outline"></span>
+              Category
+            </label>
+            <KbSelect v-model="macroCategoryId" :options="categoryOptions" aria-label="Macro category" />
           </div>
 
           <div class="form-group">

@@ -7,6 +7,7 @@ export default {
 <script setup lang="ts">
 import KbIcon from '@/components/KBKvmController/UI/KbIcon.vue'
 import ActionDropdown from '@/components/KBKvmController/UI/ActionDropdown.vue'
+import {vBarTooltips} from '@/components/KBKvmController/UI/bar-tooltips'
 import {onMounted, ref, computed, onBeforeUnmount} from 'vue'
 import TauriActions from '@/components/KBKvmController/TauriActions.vue'
 import {useSettingsStore} from '@/stores/settings'
@@ -268,6 +269,10 @@ const enhancedDeviceInfo = computed(() => {
 // Device pickers: the empty entry turns the source off
 const toSourceOptions = (list: Array<{label: string; deviceId: string}>) =>
   list.map((d) => ({value: d.deviceId, label: d.deviceId ? d.label || 'Unnamed device' : 'None'}))
+// Green source icons: the stream is running, and (for audio) actually carries a live audio track
+const hasLiveAudio = computed(
+  () => !!mediaStreamRef.value?.getAudioTracks().some((track) => track.readyState === 'live')
+)
 const videoSourceOptions = computed(() => toSourceOptions(videoDeviceList.value))
 const audioSourceOptions = computed(() => toSourceOptions(audioDeviceList.value))
 
@@ -507,6 +512,7 @@ onBeforeUnmount(() => {
     >
       <div
         ref="actionBarRef"
+        v-bar-tooltips
         class="action-bar"
         :class="[
           settingsStore.floatUI && 'float-bar',
@@ -542,7 +548,7 @@ onBeforeUnmount(() => {
 
               <ActionDropdown
                 v-if="permissionMicrophone === 'granted'"
-                icon="audio-source"
+                :icon="hasLiveAudio ? 'audio-source-live' : 'audio-source'"
                 title="Audio Source"
                 placeholder="No audio devices found"
                 selectable
@@ -564,9 +570,9 @@ onBeforeUnmount(() => {
                 class="btn-no-style orange"
                 @click="stopMediaStreaming"
                 v-if="isStreaming"
-                title="Stop All Media Devices"
+                title="Stop Media Devices"
               >
-                <KbIcon name="stop" />
+                <KbIcon name="media-stop" />
               </button>
               <button
                 class="btn-no-style green"
@@ -576,8 +582,8 @@ onBeforeUnmount(() => {
               >
                 <KbIcon name="play" />
               </button>
-              <button class="btn-no-style" @click="clearSelect" title="🛑 Reset All Media Devices">
-                <KbIcon name="reset" />
+              <button class="btn-no-style" @click="clearSelect" title="Reset Media Devices">
+                <KbIcon name="media-reset" />
               </button>
 
               <!-- Separator -->
@@ -609,7 +615,7 @@ onBeforeUnmount(() => {
                   v-if="Boolean(videoRecorder.mediaRecorder)"
                   :disabled="videoRecorder.stopping"
                   @click="videoRecorder.stop()"
-                  :title="videoRecorder.stopping ? 'Saving recording...' : '📹 Recording, click to save record'"
+                  :title="videoRecorder.stopping ? 'Saving Recording…' : 'Stop Recording & Save'"
                 >
                   <KbIcon name="recording" />
                 </button>
@@ -618,7 +624,7 @@ onBeforeUnmount(() => {
                   class="btn-no-style"
                   @click="videoRecorder.start()"
                   :disabled="!isStreaming"
-                  title="Record"
+                  title="Record Video"
                 >
                   <KbIcon name="record" />
                 </button>
@@ -657,7 +663,7 @@ onBeforeUnmount(() => {
               v-if="!isTauri"
               @click="toggleFullScreen"
               class="btn-no-style"
-              title="Fullscreen"
+              :title="isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'"
             >
               <KbIcon v-if="!isFullscreen" name="fullscreen" />
               <KbIcon v-else name="fullscreen-exit" />
@@ -794,6 +800,12 @@ onBeforeUnmount(() => {
       &.dragging {
         cursor: grabbing;
         user-select: none;
+      }
+
+      // Docked: full-width strip with both icon groups together in the center, like the floating bar
+      &:not(.float-bar) {
+        justify-content: center;
+        gap: 10px;
       }
 
       &.float-bar {

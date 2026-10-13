@@ -17,7 +17,7 @@ function toggleTop() {
 </script>
 
 <template>
-  <button class="btn-no-style" @click="toggleFullScreen">
+  <button class="btn-no-style" :title="isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'" @click="toggleFullScreen">
     <KbIcon v-if="!isFullscreen" name="fullscreen" />
     <KbIcon v-else name="fullscreen-exit" />
   </button>

@@ -924,12 +924,12 @@ const mediaKeyOptions = (() => {
       v-if="!serialPort"
       @click="initSerial"
       class="btn-no-style blue"
-      title="Connect Serial"
+      title="Connect KVM (Serial)"
     >
       <KbIcon name="serial-connect" />
     </button>
     <template v-else>
-      <button @click="closeSerial()" class="btn-no-style orange" title="Close Serial">
+      <button @click="closeSerial()" class="btn-no-style orange" title="Disconnect KVM (Serial)">
         <KbIcon name="serial-disconnect" />
       </button>
 
@@ -937,7 +937,7 @@ const mediaKeyOptions = (() => {
         v-if="isSending"
         @click="cancelSend"
         class="btn-no-style stop-sending"
-        title="Stop sending text / macro"
+        title="Stop Sending Text"
       >
         <KbIcon name="stop" />
       </button>

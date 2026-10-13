@@ -1,8 +1,8 @@
 """Generate the KitBash KVM toolbar icon set (SVG).
 
 Style: monochrome light-white line icons with rounded strokes, drawn for the logo-blue
-command bar. Filled shapes mean "solid" (play, stop, pinned). Red is reserved for the two
-live states: recording and an active video stream.
+command bar. Filled shapes mean "solid" (play, stop, pinned). Color is reserved for state:
+green for an active video/audio source, red for recording and the stop/reset media controls.
 
 Each part: (svg element string without stroke/fill, stroke color or None, fill color or None)
 
@@ -15,7 +15,10 @@ OUT = sys.argv[1]
 os.makedirs(OUT, exist_ok=True)
 
 W = '#f4f7fa'  # light white
-RED = '#ff3f1e'  # logo red-orange, live states only
+RED = '#ff3f1e'  # logo red-orange: recording, stop/reset media
+# Matches the logo's orange/red (HSV saturation ~0.75-0.88, high value) at a 140deg hue;
+# 6.1:1 contrast on the logo-blue bar
+GREEN = '#38e070'  # active video/audio source
 SW = 2  # stroke width
 
 
@@ -54,6 +57,22 @@ def dots(points, color=W):
     return [part(P(f'M{x},{y}h0'), color) for x, y in points]
 
 
+def audio_source(color):
+    return [
+        solid(P('M3.5,9.5H7L11.5,5.5V18.5L7,14.5H3.5Z'), color),
+        part(P('M15,9A4,4 0 0 1 15,15'), color),
+        part(P('M17.5,6.5A7.5,7.5 0 0 1 17.5,17.5'), color),
+    ]
+
+
+def reset_icon(color):
+    return [
+        part(P('M19,12A7,7 0 1 1 16.95,7.05'), color),
+        part(P('M19,4.5V8H15.5'), color),
+        part(P('M9.75,9.75L14.25,14.25 M14.25,9.75L9.75,14.25'), color),
+    ]
+
+
 def video_source(color):
     return [
         part(RECT(3, 4, 18, 12, 2), color),
@@ -75,12 +94,9 @@ plug = [
 ICONS = {
     # media sources
     'video-source': video_source(W),
-    'video-source-live': video_source(RED),
-    'audio-source': [
-        solid(P('M3.5,9.5H7L11.5,5.5V18.5L7,14.5H3.5Z')),
-        part(P('M15,9A4,4 0 0 1 15,15')),
-        part(P('M17.5,6.5A7.5,7.5 0 0 1 17.5,17.5')),
-    ],
+    'video-source-live': video_source(GREEN),
+    'audio-source': audio_source(W),
+    'audio-source-live': audio_source(GREEN),
     'microphone': [
         part(RECT(9, 3, 6, 11, 3)),
         part(P('M5.5,11.5A6.5,6.5 0 0 0 18.5,11.5')),
@@ -94,11 +110,8 @@ ICONS = {
     # stream control
     'play': [solid(P('M8,5L19,12L8,19Z'))],
     'stop': [solid(RECT(6, 6, 12, 12, 2))],
-    'reset': [
-        part(P('M19,12A7,7 0 1 1 16.95,7.05')),
-        part(P('M19,4.5V8H15.5')),
-        part(P('M9.75,9.75L14.25,14.25 M14.25,9.75L9.75,14.25')),
-    ],
+    'media-stop': [solid(RECT(6, 6, 12, 12, 2), RED)],
+    'media-reset': reset_icon(RED),
     # capture tools
     # Picture in a frame (save an image), not a camera, so it doesn't read as "recording"
     'screenshot': [

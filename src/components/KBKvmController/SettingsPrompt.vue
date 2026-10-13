@@ -3,8 +3,9 @@ import {ref, watch, computed, nextTick, onMounted, onBeforeUnmount} from 'vue'
 import {useVModel} from '@vueuse/core'
 import {useSettingsStore} from '@/stores/settings'
 import {DEFAULT_VIDEO_MODE, type IStreamInfo} from '@/components/KBKvmController/composables/useMediaStream'
-import {useMacrosStore, type IMacro} from '@/stores/macros'
+import {useMacrosStore, parseMacrosFile, CATEGORY_NAME_MAX_LENGTH, type IMacro, type IMacroCategory} from '@/stores/macros'
 import MacroDialog from '@/components/MacroDialog/MacroDialog.vue'
+import KbSelect from '@/components/KBKvmController/UI/KbSelect.vue'
 import {downloadUrl} from '@/components/KBKvmController/utils'
 import {fileTimestamp} from '@/utils/format-date'
 
@@ -32,17 +33,54 @@ const savedModeKey = () => {
 const selectedResolutionFps = ref(savedModeKey())
 watch(() => settingsStore.videoConfig, () => (selectedResolutionFps.value = savedModeKey()))
 const autoModeLabel = `Auto (best available, up to ${DEFAULT_VIDEO_MODE.height}p @ ${DEFAULT_VIDEO_MODE.frameRate}fps)`
+const resolutionOptions = computed(() => [
+  {value: '', label: autoModeLabel},
+  ...(settingsStore.cameraCapabilities?.options ?? []).map((o) => ({
+    value: `${o.width}x${o.height}@${o.fps}`,
+    label: o.label,
+  })),
+])
 
 const hasCapabilities = computed(() => {
   return settingsStore.cameraCapabilities && settingsStore.cameraCapabilities.options.length > 0
 })
 
+// Category filter: all macros, uncategorized ones, or a category id
+const ALL_CATEGORIES = '__all__'
+const UNCATEGORIZED = '__none__'
+const categoryFilter = ref(ALL_CATEGORIES)
+const categoryFilterOptions = computed(() => [
+  {value: ALL_CATEGORIES, label: 'All categories', hint: String(macrosStore.macros.length)},
+  ...macrosStore.categories.map((c) => ({
+    value: c.id,
+    label: c.name,
+    hint: String(macrosStore.countInCategory(c.id)),
+  })),
+  {value: UNCATEGORIZED, label: 'Uncategorized', hint: String(macrosStore.countInCategory(null))},
+])
+// A deleted category can't stay selected
+watch(
+  () => macrosStore.categories.map((c) => c.id),
+  (ids) => {
+    if (![ALL_CATEGORIES, UNCATEGORIZED, ...ids].includes(categoryFilter.value)) {
+      categoryFilter.value = ALL_CATEGORIES
+    }
+  },
+)
+const categoryName = (macro: IMacro) => macrosStore.categoryById(macro.categoryId)?.name
+
+// Category first, then search within it
 const filteredMacros = computed(() => {
+  const inCategory = macrosStore.macros.filter((macro) => {
+    if (categoryFilter.value === ALL_CATEGORIES) return true
+    if (categoryFilter.value === UNCATEGORIZED) return !macro.categoryId
+    return macro.categoryId === categoryFilter.value
+  })
   if (!macroSearchQuery.value.trim()) {
-    return macrosStore.macros
+    return inCategory
   }
   const query = macroSearchQuery.value.toLowerCase()
-  return macrosStore.macros.filter((macro) => {
+  return inCategory.filter((macro) => {
     return (
       macro.name.toLowerCase().includes(query) ||
       macro.message.toLowerCase().includes(query)
@@ -134,8 +172,6 @@ const showKeyboardCompatibleModeTip = () => {
 }
 
 // Macro management
-// Matches the name limit enforced by MacroDialog
-const MACRO_NAME_MAX_LENGTH = 30
 const showMacroDialog = ref(false)
 const editingMacro = ref<IMacro | null>(null)
 
@@ -164,8 +200,14 @@ const handleOutsideClick = () => {
 // Esc closes the dialog; captured so it isn't also handled by the KVM input or video-only mode
 const handleEscape = (e: KeyboardEvent) => {
   if (e.key !== 'Escape' || !mVisible.value || showMacroDialog.value) return
+  // An open picker menu closes itself first
+  if (document.querySelector('.action-dropdown-menu')) return
   e.preventDefault()
   e.stopImmediatePropagation()
+  if (editingCategoryId.value) {
+    cancelRename()
+    return
+  }
   mVisible.value = false
 }
 onMounted(() => window.addEventListener('keydown', handleEscape, true))
@@ -181,7 +223,12 @@ const handleEditMacro = (macro: IMacro) => {
   showMacroDialog.value = true
 }
 
-const handleSaveMacro = (data: {name: string; message: string}) => {
+// New macros start in the category being viewed
+const newMacroCategoryId = computed(() =>
+  macrosStore.categoryById(categoryFilter.value)?.id ?? '',
+)
+
+const handleSaveMacro = (data: {name: string; message: string; categoryId?: string}) => {
   if (editingMacro.value) {
     // Update existing macro
     macrosStore.updateMacro(editingMacro.value.id, data)
@@ -196,6 +243,7 @@ const handleSaveMacro = (data: {name: string; message: string}) => {
       id: Date.now().toString(),
       name: data.name,
       message: data.message,
+      categoryId: data.categoryId,
     }
     macrosStore.addMacro(newMacro)
     window.$notification({
@@ -235,8 +283,54 @@ const handleClearAllMacros = () => {
   }
 }
 
+// Categories
+const newCategoryName = ref('')
+const categoryError = ref('')
+const editingCategoryId = ref<string | null>(null)
+const editingCategoryName = ref('')
+
+const handleAddCategory = () => {
+  const error = macrosStore.validateCategoryName(newCategoryName.value)
+  categoryError.value = error ?? ''
+  if (error) return
+  macrosStore.addCategory(newCategoryName.value)
+  newCategoryName.value = ''
+}
+
+const startRename = (category: IMacroCategory) => {
+  categoryError.value = ''
+  editingCategoryId.value = category.id
+  editingCategoryName.value = category.name
+}
+
+const cancelRename = () => {
+  editingCategoryId.value = null
+  categoryError.value = ''
+}
+
+const commitRename = () => {
+  const id = editingCategoryId.value
+  if (!id) return
+  const error = macrosStore.validateCategoryName(editingCategoryName.value, id)
+  categoryError.value = error ?? ''
+  if (error) return
+  macrosStore.renameCategory(id, editingCategoryName.value)
+  editingCategoryId.value = null
+}
+
+const handleDeleteCategory = (category: IMacroCategory) => {
+  const count = macrosStore.countInCategory(category.id)
+  if (count && !confirm(`Delete "${category.name}"? Its ${count} macro(s) will become uncategorized.`)) {
+    return
+  }
+  if (editingCategoryId.value === category.id) {
+    cancelRename()
+  }
+  macrosStore.deleteCategory(category.id)
+}
+
 const handleExportMacros = () => {
-  if (macrosStore.macros.length === 0) {
+  if (macrosStore.macros.length === 0 && macrosStore.categories.length === 0) {
     window.$notification({
       type: 'warning',
       message: 'No macros to export',
@@ -269,45 +363,18 @@ const handleImportMacros = () => {
 
     try {
       const text = await file.text()
-      const data: unknown = JSON.parse(text)
+      const {macros, categories, skipped} = parseMacrosFile(JSON.parse(text))
 
-      if (!Array.isArray(data)) {
-        throw new Error('Invalid file format: expected an array')
+      if (!macros.length && !categories.length) {
+        throw new Error(skipped ? `none of the ${skipped} entries are valid` : 'the file contains no macros')
       }
 
-      // Same rules as MacroDialog; invalid entries are skipped, duplicate ids regenerated
-      const isNonEmptyString = (v: unknown): v is string => typeof v === 'string' && v.trim() !== ''
-      const seenIds = new Set<string>()
-      const macros: IMacro[] = []
-      let skipped = 0
-      for (const item of data) {
-        if (
-          !item ||
-          typeof item !== 'object' ||
-          !isNonEmptyString(item.id) ||
-          !isNonEmptyString(item.name) ||
-          !isNonEmptyString(item.message) ||
-          item.name.trim().length > MACRO_NAME_MAX_LENGTH
-        ) {
-          skipped++
-          continue
-        }
-        let id = item.id
-        while (seenIds.has(id)) {
-          id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-        }
-        seenIds.add(id)
-        macros.push({id, name: item.name.trim(), message: item.message})
-      }
-
-      if (!macros.length) {
-        throw new Error(skipped ? `none of the ${skipped} entries are valid macros` : 'the file contains no macros')
-      }
-
-      macrosStore.importMacros(macros)
+      macrosStore.importMacros({macros, categories})
+      categoryFilter.value = ALL_CATEGORIES
+      const imported = `Imported ${macros.length} macro(s) in ${categories.length} categor${categories.length === 1 ? 'y' : 'ies'}`
       window.$notification({
         type: skipped ? 'warning' : 'success',
-        message: `Imported ${macros.length} macro(s)` + (skipped ? `, skipped ${skipped} invalid entr${skipped === 1 ? 'y' : 'ies'}` : ''),
+        message: imported + (skipped ? `, skipped ${skipped} invalid entr${skipped === 1 ? 'y' : 'ies'}` : ''),
         timeout: skipped ? 5000 : 3000,
       })
     } catch (error: any) {
@@ -411,16 +478,11 @@ const handleImportMacros = () => {
                       <span class="mdi mdi-video-settings"></span>
                       Resolution & Frame Rate
                     </label>
-                    <select v-model="selectedResolutionFps" class="form-select">
-                      <option value="">{{ autoModeLabel }}</option>
-                      <option
-                        v-for="option in settingsStore.cameraCapabilities?.options"
-                        :key="`${option.width}x${option.height}@${option.fps}`"
-                        :value="`${option.width}x${option.height}@${option.fps}`"
-                      >
-                        {{ option.label }}
-                      </option>
-                    </select>
+                    <KbSelect
+                      v-model="selectedResolutionFps"
+                      :options="resolutionOptions"
+                      aria-label="Resolution and frame rate"
+                    />
                   </div>
                   <button class="btn-apply" @click="handleApplyResolution">
                     <span class="mdi mdi-check-circle"></span>
@@ -444,6 +506,17 @@ const handleImportMacros = () => {
                       <span class="info-text">This camera does not support querying resolutions, or the stream has not started yet.</span>
                     </div>
                   </div>
+                </div>
+
+                <div class="advanced-row">
+                  <div class="advanced-row-info">
+                    <span class="advanced-row-label">Reset display settings</span>
+                    <span class="advanced-row-desc">Rotation, flips and fit mode back to defaults.</span>
+                  </div>
+                  <button class="btn-advanced-secondary" @click="resetDisplaySettings">
+                    <span class="mdi mdi-restore"></span>
+                    Reset
+                  </button>
                 </div>
               </div>
             </div>
@@ -511,27 +584,18 @@ const handleImportMacros = () => {
 
               <div class="settings-section">
                 <div class="section-header">
-                  <span class="mdi mdi-monitor-eye"></span>
-                  <h3>Display</h3>
+                  <span class="mdi mdi-dock-top"></span>
+                  <h3>Command Bar</h3>
                 </div>
-                <div class="form-group-checkbox">
-                  <label class="checkbox-label">
-                    <input type="checkbox" v-model="settingsStore.floatUI" class="checkbox-input" />
-                    <span class="checkbox-text">
-                      <span class="mdi mdi-dock-top"></span>
-                      Floating toolbar (overlays the video)
-                    </span>
+                <div class="radio-group">
+                  <label class="radio-label">
+                    <input type="radio" :value="false" v-model="settingsStore.floatUI" class="radio-input" />
+                    <span class="radio-text">Docked Command Bar</span>
                   </label>
-                </div>
-                <div class="advanced-row">
-                  <div class="advanced-row-info">
-                    <span class="advanced-row-label">Reset display settings</span>
-                    <span class="advanced-row-desc">Rotation, flips and fit mode back to defaults.</span>
-                  </div>
-                  <button class="btn-advanced-secondary" @click="resetDisplaySettings">
-                    <span class="mdi mdi-restore"></span>
-                    Reset
-                  </button>
+                  <label class="radio-label">
+                    <input type="radio" :value="true" v-model="settingsStore.floatUI" class="radio-input" />
+                    <span class="radio-text">Floating Command Bar</span>
+                  </label>
                 </div>
               </div>
             </div>
@@ -708,6 +772,63 @@ const handleImportMacros = () => {
 
               <div class="settings-section">
                 <div class="section-header">
+                  <span class="mdi mdi-folder-multiple-outline"></span>
+                  <h3>Categories</h3>
+                </div>
+                <form class="category-add" @submit.prevent="handleAddCategory">
+                  <input
+                    v-model="newCategoryName"
+                    type="text"
+                    class="category-input"
+                    :maxlength="CATEGORY_NAME_MAX_LENGTH"
+                    placeholder="New category name"
+                    aria-label="New category name"
+                  />
+                  <button type="submit" class="btn-macro btn-macro-primary" :disabled="!newCategoryName.trim()">
+                    <span class="mdi mdi-plus"></span>
+                    Add
+                  </button>
+                </form>
+                <div v-if="categoryError" class="category-error">{{ categoryError }}</div>
+
+                <ul v-if="macrosStore.categories.length" class="category-list">
+                  <li v-for="category in macrosStore.categories" :key="category.id" class="category-row">
+                    <template v-if="editingCategoryId === category.id">
+                      <input
+                        v-model="editingCategoryName"
+                        type="text"
+                        class="category-input"
+                        :maxlength="CATEGORY_NAME_MAX_LENGTH"
+                        aria-label="Category name"
+                        @keydown.enter.prevent="commitRename"
+                      />
+                      <button class="btn-icon" title="Save name" @click="commitRename">
+                        <span class="mdi mdi-check"></span>
+                      </button>
+                      <button class="btn-icon" title="Cancel" @click="cancelRename">
+                        <span class="mdi mdi-close"></span>
+                      </button>
+                    </template>
+                    <template v-else>
+                      <span class="mdi mdi-folder-outline category-icon"></span>
+                      <span class="category-name" :title="category.name">{{ category.name }}</span>
+                      <span class="category-count">{{ macrosStore.countInCategory(category.id) }}</span>
+                      <button class="btn-icon" title="Rename category" @click="startRename(category)">
+                        <span class="mdi mdi-pencil"></span>
+                      </button>
+                      <button class="btn-icon btn-icon-danger" title="Delete category" @click="handleDeleteCategory(category)">
+                        <span class="mdi mdi-delete"></span>
+                      </button>
+                    </template>
+                  </li>
+                </ul>
+                <p v-else class="category-empty">
+                  No categories yet. Categories group macros in the command bar's Macros menu.
+                </p>
+              </div>
+
+              <div class="settings-section">
+                <div class="section-header">
                   <span class="mdi mdi-code-brackets"></span>
                   <h3>Adv. Text Escape Sequence</h3>
                 </div>
@@ -739,6 +860,10 @@ const handleImportMacros = () => {
                 </button>
               </div>
 
+              <div v-if="macrosStore.macros.length > 0" class="macro-category-filter">
+                <KbSelect v-model="categoryFilter" :options="categoryFilterOptions" aria-label="Filter macros by category" />
+              </div>
+
               <div v-if="macrosStore.macros.length === 0" class="info-card info-card-warning">
                 <span class="mdi mdi-information-outline"></span>
                 <div class="info-content">
@@ -752,12 +877,16 @@ const handleImportMacros = () => {
                   <span class="mdi mdi-information-outline"></span>
                   <div class="info-content">
                     <span class="info-label">No macros found</span>
-                    <span class="info-text">No macros match your search query.</span>
+                    <span class="info-text">No macros match this category and search.</span>
                   </div>
                 </div>
                 <div v-for="macro in filteredMacros" :key="macro.id" class="macro-item">
                   <div class="macro-item-header">
                     <span class="macro-name">{{ macro.name }}</span>
+                    <span
+                      v-if="categoryFilter === ALL_CATEGORIES && categoryName(macro)"
+                      class="macro-category-chip"
+                    >{{ categoryName(macro) }}</span>
                     <div class="macro-actions-inline">
                       <button class="btn-icon" title="Edit macro" @click="handleEditMacro(macro)">
                         <span class="mdi mdi-pencil"></span>
@@ -814,6 +943,7 @@ const handleImportMacros = () => {
   <MacroDialog
     v-model:visible="showMacroDialog"
     :macro="editingMacro"
+    :default-category-id="newMacroCategoryId"
     @save="handleSaveMacro"
   />
   </div>
@@ -1670,6 +1800,130 @@ const handleImportMacros = () => {
   }
 }
 
+.macro-category-filter {
+  margin: -4px 0 12px;
+}
+
+.category-add {
+  display: flex;
+  gap: 8px;
+
+  .btn-macro {
+    flex: 0 0 auto;
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+  }
+}
+
+.category-input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 14px;
+
+  &::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: #2a7bb0;
+    box-shadow: 0 0 0 2px rgba(42, 123, 176, 0.25);
+  }
+}
+
+.category-error {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #ff6b4a;
+}
+
+.category-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.category-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 4px 6px 4px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+
+  .category-icon {
+    font-size: 16px;
+    color: #5aa9dc;
+  }
+
+  .category-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.92);
+  }
+
+  .category-count {
+    min-width: 22px;
+    padding: 1px 7px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    font-size: 12px;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .category-input {
+    padding: 6px 10px;
+  }
+
+  .btn-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 18px;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    &.btn-icon-danger:hover {
+      background: rgba(244, 67, 54, 0.2);
+      color: #f44336;
+    }
+  }
+}
+
+.category-empty {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
 .macros-list {
   display: flex;
   flex-direction: column;
@@ -1719,6 +1973,17 @@ const handleImportMacros = () => {
         font-size: 14px;
         font-weight: 600;
         color: #5aa9dc;
+      }
+
+      .macro-category-chip {
+        margin-right: auto;
+        margin-left: 8px;
+        padding: 1px 8px;
+        border: 1px solid rgba(90, 169, 220, 0.4);
+        border-radius: 10px;
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.75);
+        white-space: nowrap;
       }
 
       .macro-actions-inline {

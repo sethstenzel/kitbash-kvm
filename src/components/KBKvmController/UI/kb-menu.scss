@@ -1,0 +1,230 @@
+// Shared menu panel for ActionDropdown (command bar) and KbSelect (settings pickers).
+// Global because menus are teleported to <body>. Logo blue with light-white accents.
+.action-dropdown-menu {
+  --kb-accent: rgba(255, 255, 255, 0.9);
+  --kb-accent-soft: rgba(255, 255, 255, 0.12);
+
+  position: fixed;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  max-width: min(360px, calc(100vw - 16px));
+  overflow: hidden;
+  background: rgba(0, 66, 100, 0.97);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.55),
+    0 2px 8px rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  user-select: none;
+
+  .dropdown-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px 9px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.12);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .dropdown-body {
+    overflow-y: auto;
+    padding: 6px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+
+    &::-webkit-scrollbar {
+      width: 6px;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.18);
+      border-radius: 6px;
+    }
+  }
+
+  .dropdown-option {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 32px;
+    padding: 6px 12px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition:
+      background 0.12s ease,
+      color 0.12s ease;
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 7px;
+      bottom: 7px;
+      width: 3px;
+      border-radius: 3px;
+      background: var(--kb-accent);
+      opacity: 0;
+      transition: opacity 0.12s ease;
+    }
+
+    &:hover {
+      background: var(--kb-accent-soft);
+      color: #fff;
+
+      &::before {
+        opacity: 1;
+      }
+    }
+
+    &:active {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    &.selected {
+      color: #fff;
+      font-weight: 600;
+
+      .dropdown-check {
+        color: #fff;
+      }
+    }
+
+    &.disabled {
+      opacity: 0.35;
+      cursor: default;
+      pointer-events: none;
+    }
+  }
+
+  .dropdown-check {
+    display: flex;
+    flex: 0 0 14px;
+    justify-content: center;
+  }
+
+  .dropdown-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dropdown-keycaps {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+
+    kbd {
+      min-width: 22px;
+      padding: 2px 7px;
+      border-radius: 5px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-bottom-width: 2px;
+      background: rgba(255, 255, 255, 0.06);
+      font-family: inherit;
+      font-size: 11.5px;
+      font-weight: 600;
+      line-height: 1.5;
+      text-align: center;
+      color: rgba(255, 255, 255, 0.92);
+    }
+  }
+
+  .dropdown-hint {
+    margin-left: auto;
+    padding-left: 12px;
+    font-size: 11.5px;
+    color: rgba(255, 255, 255, 0.45);
+    white-space: nowrap;
+  }
+
+  .dropdown-separator {
+    height: 1px;
+    margin: 6px 8px;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .dropdown-group-header {
+    padding: 10px 12px 4px;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.4);
+
+    &:first-child {
+      padding-top: 4px;
+    }
+  }
+
+  .dropdown-empty {
+    padding: 10px 12px;
+    color: rgba(255, 255, 255, 0.45);
+  }
+}
+
+.dropdown-fade-enter-active,
+.dropdown-fade-leave-active {
+  transition:
+    opacity 0.14s ease,
+    transform 0.14s ease;
+}
+.dropdown-fade-enter-from,
+.dropdown-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+}
+
+// Sub-menus (ActionDropdown items with children)
+.action-dropdown-menu {
+  .dropdown-option.parent {
+    .dropdown-chevron {
+      flex: 0 0 auto;
+      margin-left: auto;
+      color: rgba(255, 255, 255, 0.55);
+    }
+
+    .dropdown-hint + .dropdown-chevron {
+      margin-left: 6px;
+    }
+
+    &.expanded {
+      background: var(--kb-accent-soft);
+      color: #fff;
+
+      &::before {
+        opacity: 1;
+      }
+
+      .dropdown-chevron {
+        color: #fff;
+      }
+    }
+  }
+
+  &.dropdown-submenu {
+    z-index: 10000;
+    min-width: 200px;
+    animation: kb-submenu-in 0.12s ease;
+  }
+}
+
+@keyframes kb-submenu-in {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+}
