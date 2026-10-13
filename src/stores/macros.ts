@@ -9,7 +9,7 @@ export interface IMacro {
   id: string
   name: string
   message: string
-  // Unset = uncategorized
+  // Unset only in data from older versions; normalize() moves those macros to Default
   categoryId?: string
 }
 
@@ -25,8 +25,11 @@ export const CATEGORY_NAME_MAX_LENGTH = 30
 // Export file format; older exports are a bare array of macros
 const EXPORT_FORMAT = 'kbkvm-macros'
 const EXPORT_VERSION = 2
-// Older exports have no categories; their macros are imported into this one
-export const LEGACY_IMPORT_CATEGORY = 'Default'
+
+// Built-in category every macro falls back to (new macros, older exports, deleted categories).
+// It always exists and can't be renamed or deleted.
+export const DEFAULT_CATEGORY_ID = 'default'
+export const DEFAULT_CATEGORY_NAME = 'Default'
 
 export const newId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
@@ -34,11 +37,11 @@ const isNonEmptyString = (v: unknown): v is string => typeof v === 'string' && v
 
 /**
  * Validate an exported macros file. Accepts the current {format, categories, macros} object and
- * the older bare array of macros (imported into a "Default" category). Invalid entries are
- * skipped, duplicate ids regenerated, and macros pointing at unknown categories become uncategorized.
+ * the older bare array of macros. Invalid entries are skipped and duplicate ids regenerated.
+ * Macros from older exports, without a category, or pointing at an unknown category go into
+ * Default; an exported category named "Default" is merged into it.
  */
 export const parseMacrosFile = (data: unknown) => {
-  const isLegacy = Array.isArray(data)
   const rawMacros: unknown[] | null = Array.isArray(data)
     ? data
     : data && typeof data === 'object' && Array.isArray((data as any).macros)
@@ -51,17 +54,28 @@ export const parseMacrosFile = (data: unknown) => {
 
   let skipped = 0
   const categories: IMacroCategory[] = []
-  const categoryIds = new Set<string>()
-  const categoryNames = new Set<string>()
+  // File category id -> id used here
+  const categoryIdMap = new Map<string, string>()
+  const usedIds = new Set<string>([DEFAULT_CATEGORY_ID])
+  const usedNames = new Set<string>([DEFAULT_CATEGORY_NAME.toLowerCase()])
   for (const item of rawCategories as any[]) {
     const name = isNonEmptyString(item?.name) ? item.name.trim() : ''
-    if (!isNonEmptyString(item?.id) || !name || name.length > CATEGORY_NAME_MAX_LENGTH || categoryNames.has(name.toLowerCase())) {
+    if (!isNonEmptyString(item?.id) || !name || name.length > CATEGORY_NAME_MAX_LENGTH) {
       skipped++
       continue
     }
-    const id = categoryIds.has(item.id) ? newId() : item.id
-    categoryIds.add(id)
-    categoryNames.add(name.toLowerCase())
+    if (item.id === DEFAULT_CATEGORY_ID || name.toLowerCase() === DEFAULT_CATEGORY_NAME.toLowerCase()) {
+      categoryIdMap.set(item.id, DEFAULT_CATEGORY_ID)
+      continue
+    }
+    if (usedNames.has(name.toLowerCase())) {
+      skipped++
+      continue
+    }
+    const id = usedIds.has(item.id) ? newId() : item.id
+    usedIds.add(id)
+    usedNames.add(name.toLowerCase())
+    categoryIdMap.set(item.id, id)
     categories.push({id, name})
   }
 
@@ -84,17 +98,12 @@ export const parseMacrosFile = (data: unknown) => {
       id = newId()
     }
     macroIds.add(id)
-    const macro: IMacro = {id, name: item.name.trim(), message: item.message}
-    if (isNonEmptyString(item.categoryId) && categoryIds.has(item.categoryId)) {
-      macro.categoryId = item.categoryId
-    }
-    macros.push(macro)
-  }
-
-  if (isLegacy && macros.length) {
-    const category = {id: newId(), name: LEGACY_IMPORT_CATEGORY}
-    categories.push(category)
-    macros.forEach((m) => (m.categoryId = category.id))
+    macros.push({
+      id,
+      name: item.name.trim(),
+      message: item.message,
+      categoryId: categoryIdMap.get(item.categoryId) ?? DEFAULT_CATEGORY_ID,
+    })
   }
 
   return {macros, categories, skipped}
@@ -104,17 +113,31 @@ export const useMacrosStore = defineStore('macrosStore', {
   state: (): IMacrosState => {
     return {
       macros: [],
-      categories: [],
+      categories: [{id: DEFAULT_CATEGORY_ID, name: DEFAULT_CATEGORY_NAME}],
     }
   },
   getters: {
     categoryById: (state) => (id?: string) => state.categories.find((c) => c.id === id),
-    countInCategory: (state) => (categoryId: string | null) =>
-      state.macros.filter((m) => (m.categoryId ?? null) === categoryId).length,
+    countInCategory: (state) => (categoryId: string) =>
+      state.macros.filter((m) => m.categoryId === categoryId).length,
   },
   actions: {
+    /**
+     * Make sure Default exists (first) and every macro is in an existing category. Run on startup,
+     * so macros saved before categories existed, or left uncategorized, move into Default.
+     */
+    normalize() {
+      // A user category named "Default" merges into the built-in one
+      const isDefaultName = (c: IMacroCategory) => c.name.toLowerCase() === DEFAULT_CATEGORY_NAME.toLowerCase()
+      const others = this.categories.filter((c) => c.id !== DEFAULT_CATEGORY_ID && !isDefaultName(c))
+      this.categories = [{id: DEFAULT_CATEGORY_ID, name: DEFAULT_CATEGORY_NAME}, ...others]
+      const known = new Set(this.categories.map((c) => c.id))
+      this.macros = this.macros.map((m) =>
+        m.categoryId && known.has(m.categoryId) ? m : {...m, categoryId: DEFAULT_CATEGORY_ID},
+      )
+    },
     addMacro(macro: IMacro) {
-      this.macros.push(macro)
+      this.macros.push({...macro, categoryId: macro.categoryId ?? DEFAULT_CATEGORY_ID})
     },
     updateMacro(id: string, updates: Partial<Omit<IMacro, 'id'>>) {
       const index = this.macros.findIndex((m) => m.id === id)
@@ -148,18 +171,20 @@ export const useMacrosStore = defineStore('macrosStore', {
     },
     renameCategory(id: string, name: string) {
       const category = this.categories.find((c) => c.id === id)
-      if (category) {
+      if (category && id !== DEFAULT_CATEGORY_ID) {
         category.name = name.trim()
       }
     },
-    /** Macros in the category become uncategorized */
+    /** Macros in the category move to Default; Default itself can't be deleted */
     deleteCategory(id: string) {
+      if (id === DEFAULT_CATEGORY_ID) return
       this.categories = this.categories.filter((c) => c.id !== id)
-      this.macros = this.macros.map((m) => (m.categoryId === id ? {...m, categoryId: undefined} : m))
+      this.macros = this.macros.map((m) => (m.categoryId === id ? {...m, categoryId: DEFAULT_CATEGORY_ID} : m))
     },
     importMacros(data: {macros: IMacro[]; categories: IMacroCategory[]}) {
       this.categories = data.categories
       this.macros = data.macros
+      this.normalize()
     },
     exportMacros() {
       return {

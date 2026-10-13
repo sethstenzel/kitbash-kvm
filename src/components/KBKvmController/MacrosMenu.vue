@@ -11,8 +11,8 @@ const settingsStore = useSettingsStore()
 const selectedMacro = ref('')
 
 const hasMacros = computed(() => macrosStore.macros.length > 0)
-// Categories are parent items with their macros in a sub-menu; uncategorized macros follow
-// them at the top level. Empty categories are left out.
+// Categories are parent items with their macros in a sub-menu; empty ones are left out.
+// With only one category in use, its macros are listed directly (no single sub-menu to open).
 const macroOptions = computed<DropdownOption[]>(() => {
   const toOption = (m: IMacro) => ({value: m.id, label: m.name})
   const categories = macrosStore.categories
@@ -21,13 +21,7 @@ const macroOptions = computed<DropdownOption[]>(() => {
       return {label: c.name, hint: String(children.length), children}
     })
     .filter((c) => c.children.length)
-  const uncategorized = macrosStore.macros
-    .filter((m) => !macrosStore.categoryById(m.categoryId))
-    .map(toOption)
-  if (categories.length && uncategorized.length) {
-    return [...categories, {label: '', separator: true}, ...uncategorized]
-  }
-  return [...categories, ...uncategorized]
+  return categories.length === 1 ? categories[0].children : categories
 })
 
 const handleMacroSelect = async () => {

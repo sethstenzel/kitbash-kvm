@@ -669,24 +669,24 @@ Hello[[DELAY=0.5]]World
     <ol class="steps">
       <li>Open <strong>Settings → Macros tab</strong>.</li>
       <li>Click <strong>Add Macro</strong>.</li>
-      <li>Enter a name (up to 30 characters), choose a <strong>Category</strong> (or Uncategorized) and enter the macro content using <a href="#send-advanced-text">Advanced Text syntax</a>.</li>
+      <li>Enter a name (up to 30 characters), choose a <strong>Category</strong> (defaults to the category you're viewing, otherwise <strong>Default</strong>) and enter the macro content using <a href="#send-advanced-text">Advanced Text syntax</a>.</li>
       <li>Click <strong>Save</strong>.</li>
     </ol>
     <p>New macros start in the category currently selected in the category filter.</p>
 
     <h3>Categories</h3>
-    <p>Manage categories in the <strong>Categories</strong> section of the Macros tab:</p>
+    <p>Every macro belongs to a category. The built-in <strong>Default</strong> category always exists, holds new macros unless you pick another category, and can't be renamed or deleted. Macros saved by older versions are moved into it automatically.</p>
     <table>
       <thead><tr><th>Action</th><th>How</th></tr></thead>
       <tbody>
-        <tr><td>Create</td><td>Type a name (up to 30 characters, must be unique) and click <strong>Add</strong></td></tr>
+        <tr><td>Create</td><td>Click <strong>Add Category</strong> in Macro Management and enter a name (up to 30 characters, must be unique)</td></tr>
         <tr><td>Rename</td><td>Click the pencil, edit the name, then press <kbd>Enter</kbd> or click the check mark (<kbd>Esc</kbd> cancels)</td></tr>
-        <tr><td>Delete</td><td>Click the trash icon — its macros move to <strong>Uncategorized</strong> (confirmation required if it contains macros)</td></tr>
+        <tr><td>Delete</td><td>Click the trash icon — its macros move to <strong>Default</strong> (confirmation required if it contains macros)</td></tr>
       </tbody>
     </table>
 
     <h3>Running a Macro</h3>
-    <p>Once the KVM is connected, a <strong>Macros</strong> menu appears in the command bar. Categories are listed as parent items (with a macro count) that open a sub-menu; uncategorized macros are listed below them. Empty categories are not shown. Select a macro to run it immediately using the same engine as Send Advanced Text.</p>
+    <p>Once the KVM is connected, a <strong>Macros</strong> menu appears in the command bar. Categories are listed as parent items (with a macro count) that open a sub-menu. Empty categories are not shown, and when only one category has macros they are listed directly. Select a macro to run it immediately using the same engine as Send Advanced Text.</p>
 
     <h3>Managing Macros</h3>
     <table>
@@ -702,11 +702,11 @@ Hello[[DELAY=0.5]]World
     <p>Exported files are named <code>kbkvm_macros_YYYY-MM-DD_HH-mm-ss.json</code> and include the categories.</p>
     <div class="callout warn">
       <span class="icon">⚠</span>
-      <div class="body">Importing <strong>replaces</strong> the current macros and categories. Files exported by older versions (without categories) are imported into a category named <strong>Default</strong>. Invalid entries are skipped and reported.</div>
+      <div class="body">Importing <strong>replaces</strong> the current macros and categories. Macros from files exported by older versions (without categories) go into <strong>Default</strong>; an exported category named Default is merged into it. Invalid entries are skipped and reported.</div>
     </div>
 
     <h3>Searching Macros</h3>
-    <p>Use the search box in the Macros tab to filter macros by name or message content in real time. The category filter below it (All categories, a single category, or Uncategorized — each with a count) narrows the list first, and the search applies within it.</p>
+    <p>Use the search box in the Macros tab to filter macros by name or message content in real time. The category filter below it (All categories or a single category — each with a count) narrows the list first, and the search applies within it.</p>
 
     <h3>Example Macro</h3>
     <pre><code>Name:    Open Terminal

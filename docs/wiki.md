@@ -309,24 +309,24 @@ Macros let you save frequently used advanced text sequences and run them instant
 
 1. Open **Settings → Macros tab**.
 2. Click **Add Macro**.
-3. Enter a name (up to 30 characters), choose a **Category** (or Uncategorized) and enter the macro message using [Advanced Text syntax](#advanced-text-command-reference).
+3. Enter a name (up to 30 characters), choose a **Category** (defaults to the category you're viewing, otherwise **Default**) and enter the macro message using [Advanced Text syntax](#advanced-text-command-reference).
 4. Click **Save**.
 
 New macros start in the category currently selected in the category filter.
 
 ### Categories
 
-Manage categories in the **Categories** section of the Macros tab:
+Every macro belongs to a category. The built-in **Default** category always exists, holds new macros unless you pick another category, and can't be renamed or deleted. Macros saved by older versions are moved into it automatically.
 
 | Action | How |
 |--------|-----|
-| Create | Type a name (up to 30 characters, must be unique) and click **Add** |
+| Create | Click **Add Category** in Macro Management and enter a name (up to 30 characters, must be unique) |
 | Rename | Click the pencil, edit the name, then press **Enter** or click the check mark (**Esc** cancels) |
-| Delete | Click the trash icon — its macros move to **Uncategorized** (confirmation required if it contains macros) |
+| Delete | Click the trash icon — its macros move to **Default** (confirmation required if it contains macros) |
 
 ### Running a Macro
 
-Once the KVM is connected, a **Macros** menu appears in the command bar. Categories are listed as parent items (with a macro count) that open a sub-menu; uncategorized macros are listed below them. Empty categories are not shown. Select a macro to run it immediately.
+Once the KVM is connected, a **Macros** menu appears in the command bar. Categories are listed as parent items (with a macro count) that open a sub-menu. Empty categories are not shown, and when only one category has macros they are listed directly. Select a macro to run it immediately.
 
 ### Managing Macros
 
@@ -338,11 +338,11 @@ Once the KVM is connected, a **Macros** menu appears in the command bar. Categor
 | Import | Load macros and categories from a `.json` file |
 | Export | Save all macros and categories to a `.json` file |
 
-Exported files are named `kbkvm_macros_YYYY-MM-DD_HH-mm-ss.json` and include the categories. Importing **replaces** the current macros and categories. Files exported by older versions (without categories) are imported into a category named **Default**. Invalid entries are skipped and reported.
+Exported files are named `kbkvm_macros_YYYY-MM-DD_HH-mm-ss.json` and include the categories. Importing **replaces** the current macros and categories. Macros from files exported by older versions (without categories) go into **Default**; an exported category named Default is merged into it. Invalid entries are skipped and reported.
 
 ### Searching Macros
 
-Use the search box in the Macros tab to filter by name or message content. The category filter below it (All categories, a single category, or Uncategorized — each with a count) narrows the list first, and the search applies within it.
+Use the search box in the Macros tab to filter by name or message content. The category filter below it (All categories or a single category — each with a count) narrows the list first, and the search applies within it.
 
 ---
 

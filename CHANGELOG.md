@@ -5,6 +5,21 @@ Versions follow [Semantic Versioning](https://semver.org/): **MAJOR** for breaki
 **MINOR** for new features, **PATCH** for fixes. The version lives in `package.json` and is
 used by the web app (Settings > Advanced > About) and the desktop installers.
 
+## [2.3.0] - 2026-10-13
+
+### Added
+- Built-in **Default** macro category: always present, can't be renamed or deleted, and new macros
+  go into it unless another category is chosen (or is being viewed). Macros saved without a
+  category, and those from older exports, are moved into it; deleting a category moves its
+  macros there. An imported category named "Default" is merged into it.
+- **Add Category** button in Macro Management (replaces the inline name field).
+
+### Changed
+- "Uncategorized" is gone from the macro editor, category filter and command bar menu. The Macros
+  menu lists macros directly when only one category is in use.
+- Settings > Video fits without scrolling: rotate and flip options are laid out in rows, and the
+  settings panel uses up to 88% of the window height (max 760px).
+
 ## [2.2.1] - 2026-10-13
 
 ### Changed

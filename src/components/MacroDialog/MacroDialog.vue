@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue'
 import {useVModel} from '@vueuse/core'
-import {useMacrosStore, MACRO_NAME_MAX_LENGTH, type IMacro} from '@/stores/macros'
+import {useMacrosStore, MACRO_NAME_MAX_LENGTH, DEFAULT_CATEGORY_ID, type IMacro} from '@/stores/macros'
 import {useSettingsStore} from '@/stores/settings'
 import KbSelect from '@/components/KBKvmController/UI/KbSelect.vue'
 import {getEscapeMarkers} from '@/components/KBKvmController/utils/send-text'
@@ -9,7 +9,7 @@ import {getEscapeMarkers} from '@/components/KBKvmController/utils/send-text'
 interface Props {
   visible: boolean
   macro?: IMacro | null
-  // Category preselected for a new macro ('' = uncategorized)
+  // Category preselected for a new macro (falls back to Default)
   defaultCategoryId?: string
 }
 
@@ -17,17 +17,16 @@ const emit = defineEmits(['update:visible', 'save'])
 const props = withDefaults(defineProps<Props>(), {
   visible: false,
   macro: null,
-  defaultCategoryId: '',
+  defaultCategoryId: DEFAULT_CATEGORY_ID,
 })
 
 const mVisible = useVModel(props, 'visible', emit)
 
 const settingsStore = useSettingsStore()
 const macrosStore = useMacrosStore()
-const categoryOptions = computed(() => [
-  {value: '', label: 'Uncategorized'},
-  ...macrosStore.categories.map((c) => ({value: c.id, label: c.name})),
-])
+const categoryOptions = computed(() =>
+  macrosStore.categories.map((c) => ({value: c.id, label: c.name})),
+)
 // Wrap a command in the configured escape markers, e.g. cmd('ENTER') -> '[[ENTER]]'
 const cmd = computed(() => {
   const [open, close] = getEscapeMarkers(settingsStore.advancedTextEscapeStyle)
@@ -36,7 +35,7 @@ const cmd = computed(() => {
 
 const macroName = ref('')
 const macroMessage = ref('')
-const macroCategoryId = ref('')
+const macroCategoryId = ref(DEFAULT_CATEGORY_ID)
 const nameError = ref('')
 
 watch(mVisible, (val) => {
@@ -45,7 +44,7 @@ watch(mVisible, (val) => {
       // Editing existing macro
       macroName.value = props.macro.name
       macroMessage.value = props.macro.message
-      macroCategoryId.value = props.macro.categoryId ?? ''
+      macroCategoryId.value = props.macro.categoryId ?? DEFAULT_CATEGORY_ID
     } else {
       // Creating new macro
       macroName.value = ''
@@ -86,7 +85,7 @@ const handleSave = () => {
     name: macroName.value.trim(),
     message: macroMessage.value,
     // The chosen category may have been deleted meanwhile
-    categoryId: macrosStore.categoryById(macroCategoryId.value)?.id,
+    categoryId: macrosStore.categoryById(macroCategoryId.value)?.id ?? DEFAULT_CATEGORY_ID,
   })
   mVisible.value = false
 }
