@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KitBash KVM — User Guide</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --bg2: #1a1d27;
+      --bg3: #22263a;
+      --border: rgba(255,255,255,0.08);
+      --accent: #4f8ef7;
+      --accent2: #00d4aa;
+      --text: #e2e8f0;
+      --text-muted: #8892a4;
+      --code-bg: #161b2e;
+      --success: #4caf50;
+      --warning: #ffcc00;
+      --danger: #f44336;
+      --sidebar-width: 270px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.7;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: var(--sidebar-width);
+      min-width: var(--sidebar-width);
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 24px 0 40px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #sidebar .logo {
+      padding: 0 20px 20px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    #sidebar .logo h1 {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 0.02em;
+    }
+    #sidebar .logo span {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    #sidebar nav a {
+      display: block;
+      padding: 6px 20px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 13.5px;
+      transition: color 0.15s, background 0.15s;
+      border-left: 2px solid transparent;
+    }
+    #sidebar nav a:hover {
+      color: var(--text);
+      background: rgba(255,255,255,0.04);
+    }
+    #sidebar nav a.active {
+      color: var(--accent);
+      border-left-color: var(--accent);
+      background: rgba(79,142,247,0.07);
+    }
+    #sidebar nav .nav-section {
+      padding: 14px 20px 4px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+    }
+
+    /* ── Main ── */
+    #main {
+      flex: 1;
+      max-width: 860px;
+      padding: 48px 56px 80px;
+      overflow-x: hidden;
+    }
+
+    /* ── Typography ── */
+    h1 { font-size: 32px; font-weight: 800; color: #fff; margin-bottom: 8px; }
+    h2 {
+      font-size: 22px; font-weight: 700; color: #fff;
+      margin: 52px 0 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    h3 { font-size: 16px; font-weight: 600; color: var(--accent2); margin: 28px 0 10px; }
+    h4 { font-size: 14px; font-weight: 600; color: var(--text); margin: 20px 0 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    p { margin-bottom: 14px; color: var(--text); }
+    p:last-child { margin-bottom: 0; }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── Lead ── */
+    .lead {
+      font-size: 16px;
+      color: var(--text-muted);
+      margin-bottom: 32px;
+      line-height: 1.8;
+    }
+
+    /* ── Section anchor ── */
+    section { scroll-margin-top: 24px; }
+
+    /* ── Tables ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0 24px;
+      font-size: 14px;
+    }
+    thead th {
+      background: var(--bg3);
+      color: var(--text-muted);
+      font-weight: 600;
+      text-align: left;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    tbody td {
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: rgba(255,255,255,0.025); }
+    td code, th code { font-size: 13px; }
+
+    /* ── Code ── */
+    code {
+      font-family: "Cascadia Code", "Fira Code", Consolas, monospace;
+      background: var(--code-bg);
+      color: #a8d8ff;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px 20px;
+      overflow-x: auto;
+      margin: 14px 0 22px;
+      line-height: 1.6;
+    }
+    pre code {
+      background: none;
+      padding: 0;
+      font-size: 13.5px;
+      color: #c9e0ff;
+    }
+
+    /* ── Callouts ── */
+    .callout {
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin: 18px 0;
+      font-size: 14px;
+      border-left: 3px solid;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .callout.tip  { background: rgba(0,212,170,0.08); border-color: var(--accent2); color: var(--accent2); }
+    .callout.info { background: rgba(79,142,247,0.08); border-color: var(--accent); color: #90b8ff; }
+    .callout.warn { background: rgba(255,204,0,0.08); border-color: var(--warning); color: var(--warning); }
+    .callout .icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+    .callout .body { color: var(--text); }
+    .callout .body strong { color: inherit; }
+
+    /* ── Key badges ── */
+    kbd {
+      display: inline-block;
+      background: var(--bg3);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-bottom-width: 2px;
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-size: 12px;
+      font-family: inherit;
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    /* ── Step list ── */
+    ol.steps { padding-left: 20px; margin: 12px 0 20px; }
+    ol.steps li { margin-bottom: 10px; padding-left: 4px; }
+
+    ul.features { padding-left: 20px; margin: 10px 0 18px; }
+    ul.features li { margin-bottom: 6px; }
+
+    /* ── Command grid ── */
+    .cmd-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 8px;
+      margin: 12px 0 20px;
+    }
+    .cmd-grid code {
+      display: block;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    /* ── Escape style comparison ── */
+    .style-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin: 14px 0 20px;
+    }
+    .style-card {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      text-align: center;
+    }
+    .style-card.active { border-color: var(--accent); }
+    .style-card .label { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.08em; }
+    .style-card code { font-size: 15px; background: none; color: #fff; padding: 0; }
+    .style-card .badge {
+      display: inline-block;
+      margin-top: 8px;
+      font-size: 10px;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 20px;
+      padding: 2px 8px;
+    }
+
+    /* ── Baud table highlight ── */
+    .highlight-row td:first-child { color: var(--accent2); font-weight: 600; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      #sidebar { display: none; }
+      #main { padding: 32px 24px 60px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════
+     SIDEBAR
+     ════════════════════════════════════════════════════════ -->
+<aside id="sidebar">
+  <div class="logo">
+    <h1>KitBash KVM</h1>
+    <span>User Guide</span>
+  </div>
+  <nav>
+    <div class="nav-section">Introduction</div>
+    <a href="#overview">Overview</a>
+    <a href="#getting-started">Getting Started</a>
+
+    <div class="nav-section">Interface</div>
+    <a href="#action-bar">Action Bar</a>
+    <a href="#video">Video &amp; Camera</a>
+
+    <div class="nav-section">KVM Input</div>
+    <a href="#kvm-input">Keyboard &amp; Mouse</a>
+    <a href="#send-text">Send Text</a>
+    <a href="#send-advanced-text">Send Advanced Text</a>
+    <a href="#hotkeys">Send Common Hotkeys</a>
+    <a href="#media-keys">Send Media Keys</a>
+
+    <div class="nav-section">Productivity</div>
+    <a href="#macros">Macros</a>
+    <a href="#qr-scanner">QR Code Scanner</a>
+    <a href="#ocr">OCR Text Extraction</a>
+    <a href="#capture">Screenshots &amp; Recording</a>
+
+    <div class="nav-section">Configuration</div>
+    <a href="#settings">Settings</a>
+    <a href="#command-reference">Command Reference</a>
+  </nav>
+</aside>
+
+<!-- ════════════════════════════════════════════════════════
+     MAIN CONTENT
+     ════════════════════════════════════════════════════════ -->
+<main id="main">
+
+  <!-- ── Hero ── -->
+  <h1>KitBash KVM</h1>
+  <p class="lead">
+    A browser and desktop application for controlling a remote computer using a USB capture card
+    and a CH9329-based HID adapter. Stream live video and forward keyboard and mouse input —
+    no software needed on the target machine.
+  </p>
+
+  <!-- ══════════════════════════════════════════ -->
+  <section id="overview">
+    <h2>Overview</h2>
+    <p>
+      KitBash KVM works by combining two hardware components:
+    </p>
+    <ul class="features">
+      <li><strong>USB Capture Card</strong> — captures the target machine's video and audio output and presents it as a webcam to your browser.</li>
+      <li><strong>CH9329 / NanoKVM USB Adapter</strong> — receives serial commands from KitBash KVM and emulates a USB keyboard and mouse on the target machine.</li>
+    </ul>
+    <p>
+      Together these let you see and control any machine that has a USB port and a video output,
+      including machines during BIOS, OS installation, or without a network connection.
+    </p>
+  </section>
+
+  <!-- ══════════════════════════════════════════ -->
+  <section id="getting-started">
+    <h2>Getting Started</h2>
+    <ol class="steps">
+      <li>Connect your <strong>USB capture card</strong> to the target machine's video output (HDMI, DP, VGA via adapter).</li>
+      <li>Connect your <strong>CH9329 / NanoKVM USB adapter</strong> between your computer and a USB port on the target machine.</li>
+      <li>Open KitBash KVM in your browser or launch the desktop app.</li>
+      <li>Select your <strong>Video</strong> device (the capture card) and optionally an <strong>Audio</strong> device from the action bar dropdowns.</li>
+      <li>Click the <strong>▶ Play</strong> button to start the video stream.</li>
+      <li>Select your <strong>Serial Port</strong> (the CH9329/NanoKVM adapter) and the correct <strong>Baud Rate</strong>.</li>
+      <li>Click <strong>Connect</strong> — you are now forwarding keyboard and mouse input to the target.</li>
+    </ol>
+    <div class="callout tip">
+      <span class="icon">💡</span>
+      <div class="body">For a Sipeed NanoKVM USB, use baud rate <strong>57600</strong>. For a standard CH9329 module, use <strong>9600</strong>.</div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════ -->
+  <section id="action-bar">
+    <h2>Action Bar</h2>
+    <p>The action bar runs across the top of the screen and contains all device controls, input tools, and settings.</p>
+
+    <h3>Float Mode vs. Static Mode</h3>
+    <table>
+      <thead><tr><th>Mode</th><th>Behaviour</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Float Mode</strong> (default)</td><td>A rounded pill that appears when you move the mouse and auto-hides after inactivity. Keeps the video unobstructed during use.</td></tr>
+        <tr><td><strong>Static Mode</strong></td><td>Always visible at the top of the screen. Toggle in Settings → Float UI.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Auto-Hide Behaviour</h3>
+    <ul class="features">
+      <li>Moving the mouse or pressing a key shows the bar.</li>
+      <li>Entering capture mode (clicking the video while connected) <strong>automatically hides</strong> the bar.</li>
+      <li>Pressing <kbd>Escape</kbd> to exit capture mode <strong>automatically shows</strong> the bar again.</li>
+      <li>Starting a QR or OCR scan hides the bar for the duration of the scan.</li>
+    </ul>
+
+    <h3>Dragging</h3>
+    <p>Click and drag on any open area of the action bar to reposition it horizontally (up to 25% of the screen width in either direction).</p>
+
+    <h3>Desktop Controls (Tauri app only)</h3>
+    <table>
+      <thead><tr><th>Button</th><th>Function</th></tr></thead>
+      <tbody>
+        <tr><td>Fullscreen</td><td>Toggle fullscreen mode</td></tr>
+        <tr><td>📌 / 🔝 Always on Top</td><td>Pin the window above all other windows</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ══════════════════════════════════════════ -->
+  <section id="video">
+    <h2>Video &amp; Camera</h2>
+
+    <h3>Device Selection</h3>
+    <table>
+      <thead><tr><th>Control</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>Video dropdown</td><td>Select the USB capture card</td></tr>
+        <tr><td>Audio dropdown</td><td>Select the audio input from the capture card</td></tr>
+        <tr><td>▶ Play</td><td>Start streaming from the selected devices</td></tr>
+        <tr><td>⏹ Stop</td><td>Stop the stream and release devices</td></tr>
+        <tr><td>✕ Reset</td><td>Clear device selection</td></tr>
+      </tbody>
+    </table>
+    <p>A device info overlay appears briefly when the stream starts, showing the device name, resolution, and frame rate.</p>
+
+    <h3>Resolution &amp; Frame Rate</h3>
+    <p>KitBash KVM can discover and test which resolution/FPS combinations your capture card actually supports.</p>
+    <ol class="steps">
+      <li>Start the video stream.</li>
+      <li>Open <strong>Settings → Video tab</strong>.</li>
+      <li>Click <strong>Recheck Video Settings</strong> — the app tests every common resolution and frame rate and lists only confirmed-working combinations.</li>
+      <li>Select a combination from the <strong>Resolution &amp; FPS</strong> dropdown.</li>
+      <li>Click <strong>Apply Resolution &amp; Frame Rate Settings</strong>.</li>
+    </ol>
+    <div class="callout info">
+      <span class="icon">ℹ</span>
+      <div class="body">Tested combinations are cached per device so rechecking is only needed once, or when you change hardware.</div>
+    </div>
+
+    <h3>Video Fit Modes</h3>
+    <table>
+      <thead><tr><th>Mode</th><th>Behaviour</th></tr></thead>
+      <tbody>
+        <tr><td><code>contain</code></td><td>Letterboxed — full frame visible, aspect ratio preserved (default)</td></tr>
+        <tr><td><code>fill</code></td><td>Stretches to fill viewport, may distort</td></tr>
+        <tr><td><code>cover</code></td><td>Fills viewport and crops edges, aspect ratio preserved</td></tr>
+        <tr><td><code>none</code></td><td>Original captured resolution, no scaling</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Flip &amp; Rotate</h3>
+    <p>Found in <strong>Settings → Video tab → right column</strong>:</p>
+    <ul class="features">
+      <li><strong>Rotation:</strong> None, 90°, −90°, 180°</li>
+      <li><strong>Flip Horizontal / Flip Vertical:</strong> Mirror the image along either axis</li>
+    </ul>
+
+    <h3>Video Filters</h3>
+    <p>Optional CSS-based visual filters applied to the display only (does not affect recordings or screenshots):</p>
+    <p>Grayscale · Sepia · High Contrast · Hue Rotate · Blur · Invert · Brightness</p>
+  </section>
+
+  <!-- ══════════════════════════════════════════ -->
+  <section id="kvm-input">
+    <h2>KVM Input (Keyboard &amp; Mouse)</h2>
+
+    <h3>Connecting</h3>
+    <ol class="steps">
+      <li>Select the serial port for your adapter from the <strong>Serial Port</strong> dropdown.</li>
+      <li>Choose the correct <strong>Baud Rate</strong>:</li>
+    </ol>
+    <table>
+      <thead><tr><th>Baud Rate</th><th>Device</th></tr></thead>
+      <tbody>
+        <tr><td><code>9600</code></td><td>Standard CH9329 module (default firmware)</td></tr>
+        <tr class="highlight-row"><td><code>57600</code></td><td>Sipeed NanoKVM USB (default firmware)</td></tr>
+        <tr><td><code>115200</code></td><td>Modified CH9329 firmware</td></tr>
+      </tbody>
+    </table>
+    <ol class="steps" start="3">
+      <li>Click <strong>Connect</strong>.</li>
+    </ol>
+
+    <h3>Keyboard Capture</h3>
+    <p>Once connected, click anywhere on the video to enter capture mode. All keystrokes are forwarded to the target machine.</p>
+    <ul class="features">
+      <li>Press <kbd>Escape</kbd> to exit capture — the action bar reappears automatically.</li>
+      <li>Full modifier key support: <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Alt</kbd> <kbd>Win</kbd>/<kbd>Cmd</kbd></li>
+    </ul>
+    <div class="callout tip">
+      <span class="icon">💡</span>
+      <div class="body"><strong>Keyboard Compatible Mode:</strong> Enable in Settings if keystrokes behave incorrectly on Linux or older systems. Uses an alternate HID report format.</div>
+    </div>
+
+    <h3>Mouse Modes</h3>
+    <p>Set in <strong>Settings → Settings tab → Cursor Mode</strong>.</p>
+
+    <h4>Absolute Mode (default)</h4>
+    <p>Mouse position maps directly to coordinates on the target screen. A crosshair cursor marks the active area.</p>
+    <ul class="features">
+      <li><strong>Absolute Mouse Area Width / Height:</strong> Configure what percentage of the video area maps to the target screen (0–100%). Useful when the target resolution doesn't fill the entire capture area.</li>
+    </ul>
+
+    <h4>Relative Mode</h4>
+    <p>Uses pointer lock — movements are captured as deltas and forwarded directly. Recommended for Linux guests where absolute positioning can be unreliable.</p>
+
+    <h3>Auto Capture Mouse</h3>
+    <p>When enabled (default), clicking the video immediately enters capture mode. When disabled, a confirmation dialog appears first.</p>
+  </section>
+
+  <!-- ══════════════════════════════════════════ -->
+  <section id="send-text">
+    <h2>Send Text</h2>
+    <p>Sends a string of plain text to the target machine as a series of keystrokes.</p>
+    <ol class="steps">
+      <li>Click <strong>Send Text</strong> in the action bar.</li>
+      <li>Type or paste your text in the dialog.</li>
+      <li>Press <strong>OK</strong> or <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to send.</li>
+    </ol>
+    <ul class="features">
+      <li>Characters are sent one at a time with a small inter-key delay.</li>
+      <li>Only ASCII characters are supported. Unsupported characters trigger a warning notification.</li>
+      <li>Uppercase letters are handled automatically using Shift.</li>
+    </ul>
+    <div class="callout tip">
+      <span class="icon">💡</span>
+      <div class="body">For text with special keys or delays, use <a href="#send-advanced-text">Send Advanced Text</a> instead.</div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════ -->
+  <section id="send-advanced-text">
+    <h2>Send Advanced Text</h2>
+    <p>
+      Sends text with embedded command sequences for pressing special keys,
+      modifier combinations, and timed delays — useful for automating login sequences,
+      scripts, and repetitive tasks.
+    </p>
+    <ol class="steps">
+      <li>Click <strong>Send Adv. Text</strong> in the action bar.</li>
+      <li>Enter your text and commands using the escape sequence syntax below.</li>
+      <li>Press <strong>OK</strong> or <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to send.</li>
+    </ol>
+
+    <h3>Escape Sequence Style</h3>
+    <p>Commands are wrapped in escape markers. Choose your preferred style in <strong>Settings → Settings tab → Adv. Text Escape Sequence</strong>.</p>
+    <div class="style-cards">
+      <div class="style-card active">
+        <div class="label">Square (default)</div>
+        <code>[[ENTER]]</code>
+        <div class="badge">Default</div>
+      </div>
+      <div class="style-card">
+        <div class="label">Curly</div>
+        <code>{{ENTER}}</code>
+      </div>
+      <div class="style-card">
+        <div class="label">Pipe</div>
+        <code>||ENTER||</code>
+      </div>
+    </div>
+
+    <h3>Examples</h3>
+    <pre><code>Username[[TAB]]Password[[DELAY=1]][[ENTER]]
+[[WIN+M]]
+[[CTRL+ALT+DEL]]
+Hello[[DELAY=0.5]]World
+[[CTRL+SHIFT+ESC]]</code></pre>
+
+    <p>See the full <a href="#command-reference">Command Reference</a> for every supported command.</p>
+  </section>
+
+  <!-- ══════════════════════════════════════════ -->
+  <section id="hotkeys">
+    <h2>Send Common Hotkeys</h2>
+    <p>Sends a single predefined key combination with one click. Select from the dropdown and press <strong>Send</strong>.</p>
+    <table>
+      <thead><tr><th>Hotkey</th><th>Common Use</th></tr></thead>
+      <tbody>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Del</kbd></td><td>Task Manager / Login screen (Windows)</td></tr>
+        <tr><td><kbd>Alt</kbd>+<kbd>F4</kbd></td><td>Close active window</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+<kbd>Space</kbd></td><td>Input method toggle</td></tr>
+        <tr><td><kbd>Alt</kbd>+<kbd>Space</kbd></td><td>Window system menu</td></tr>
+        <tr><td><kbd>Meta / Win</kbd></td><td>Open Start menu</td></tr>
+        <tr><td><kbd>Meta / Win</kbd>+<kbd>Tab</kbd></td><td>Task view / Mission Control</td></tr>
+        <tr><td><kbd>Alt</kbd>+<kbd>Tab</kbd></td><td>Switch windows</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Escape key</td></tr>
+        <tr><td><kbd>Capslock</kbd></td><td>Toggle caps lock</td></tr>
+        <tr><td><kbd>F1</kbd></td><td>Help</td></tr>
+        <tr><td><kbd>F2</kbd></td><td>Rename / Edit</td></tr>
+        <tr><td><kbd>F10</kbd></td><td>Menu bar focus</td></tr>
+        <tr><td><kbd>F12</kbd></td><td>Developer tools / Save As</td></tr>
+        <tr><td><kbd>Delete</kbd></td><td>Delete</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ══════════════════════════════════════════ -->
+  <section id="media-keys">
+    <h2>Send Media Keys</h2>
+    <p>Control media playback and system power state on the target machine.</p>
+
+    <h3>Media Control</h3>
+    <table>
+      <thead><tr><th>Key</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td>🔇 Mute</td><td>Toggle mute</td></tr>
+        <tr><td>🔊 Volume Up</td><td>Increase volume</td></tr>
+        <tr><td>🔉 Volume Down</td><td>Decrease volume</td></tr>
+      </tbody>
+    </table>
+
+    <h3>ACPI Power Keys</h3>
+    <table>
+      <thead><tr><th>Key</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td>Wake-up</td><td>Wake from sleep</td></tr>
+        <tr><td>Sleep</td><td>Put the system to sleep</td></tr>
+        <tr><td>Power</td><td>Simulate power button press</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ══════════════════════════════════════════ -->
+  <section id="macros">
+    <h2>Macros</h2>
+    <p>Macros let you save frequently used advanced text sequences and run them instantly from the action bar.</p>
+
+    <h3>Creating a Macro</h3>
+    <ol class="steps">
+      <li>Open <strong>Settings → Macros tab</strong>.</li>
+      <li>Click <strong>Add Macro</strong>.</li>
+      <li>Enter a name (up to 30 characters) and the macro content using <a href="#send-advanced-text">Advanced Text syntax</a>.</li>
+      <li>Click <strong>OK</strong> to save.</li>
+    </ol>
+
+    <h3>Running a Macro</h3>
+    <p>Select a macro from the <strong>Select Macro</strong> dropdown in the action bar and press the run button. The macro executes immediately using the same engine as Send Advanced Text.</p>
+
+    <h3>Managing Macros</h3>
+    <table>
+      <thead><tr><th>Action</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>Edit ✏</td><td>Modify the macro name or message</td></tr>
+        <tr><td>Delete 🗑</td><td>Remove a single macro</td></tr>
+        <tr><td>Clear All</td><td>Delete all macros (requires confirmation)</td></tr>
+        <tr><td>Import</td><td>Load macros from a <code>.json</code> file</td></tr>
+        <tr><td>Export</td><td>Save all macros to a timestamped <code>.json</code> file</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Searching Macros</h3>
+    <p>Use the search box in the Macros tab to filter macros by name or message content in real time.</p>
+
+    <h3>Example Macro</h3>
+    <pre><code>Name:    Open Terminal
+Message: [[CTRL+ALT+T]]
+
+Name:    Login Sequence
+Message: admin[[TAB]]P@ssw0rd[[DELAY=1]][[ENTER]]
+
+Name:    Lock Screen
+Message: [[WIN+L]]</code></pre>
+  </section>
+
+  <!-- ══════════════════════════════════════════ -->
+  <section id="qr-scanner">
+    <h2>QR Code Scanner</h2>
+    <p>Scan QR codes displayed on the target machine's screen without needing to type them manually.</p>
+    <ol class="steps">
+      <li>Click the <strong>QR Scanner</strong> button (cyan icon) in the action bar.</li>
+      <li>A darkened selection overlay appears over the video stream.</li>
+      <li>Drag to draw a box around the QR code — the selected area shows clearly while the rest dims.</li>
+      <li>Release — the app decodes the QR code and copies the result to your clipboard.</li>
+    </ol>
+    <ul class="features">
+      <li>A notification confirms success or indicates no code was found.</li>
+      <li>Press <kbd>Escape</kbd> to cancel without scanning.</li>
+      <li>The hint text fades out after 2 seconds so it doesn't obscure the image.</li>
+    </ul>
+    <div class="callout tip">
+      <span class="icon">💡</span>
+      <div class="body"><strong>Auto-Open QR Links:</strong> Enable in Settings to automatically open scanned URLs in a new browser tab.</div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════ -->
+  <section id="ocr">
+    <h2>OCR Text Extraction</h2>
+    <p>Extract text visible on the target machine's screen using optical character recognition (Tesseract.js).</p>
+    <ol class="steps">
+      <li>Click the <strong>OCR</strong> button (orange icon) in the action bar.</li>
+      <li>A darkened selection overlay appears over the video stream.</li>
+      <li>Drag to draw a box around the text — the selected area shows clearly while the rest dims.</li>
+      <li>Release — the app runs OCR and copies the extracted text to your clipboard.</li>
+    </ol>
+    <ul class="features">
+      <li>A notification confirms success or warns if no text was found.</li>
+      <li>Press <kbd>Escape</kbd> to cancel without scanning.</li>
+      <li>Processing may take a few seconds for large areas.</li>
+    </ul>
+    <div class="callout tip">
+      <span class="icon">💡</span>
+      <div class="body"><strong>Auto-Open OCR URLs:</strong> Enable in Settings to automatically open any URLs detected in the extracted text.</div>
+    </div>
+    <div class="callout info">
+      <span class="icon">ℹ</span>
+      <div class="body">OCR works best on clear, high-contrast text at a reasonable font size. Increase the video resolution for better accuracy.</div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════ -->
+  <section id="capture">
+    <h2>Screenshots &amp; Video Recording</h2>
+
+    <h3>Screenshots</h3>
+    <table>
+      <thead><tr><th>Action</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>Click screenshot button</td><td>Full-frame PNG of the current video</td></tr>
+        <tr><td><kbd>Shift</kbd>+Click screenshot button</td><td>Area selection — drag to capture a specific region</td></tr>
+      </tbody>
+    </table>
+    <p>Screenshots are automatically downloaded as <code>screenshot_kbkvm_YYYY-MM-DD_HH-mm-ss.png</code>.</p>
+
+    <h3>Video Recording</h3>
+    <ol class="steps">
+      <li>Click the <strong>Record</strong> button to start recording.</li>
+      <li>The button turns red and blinks while recording is active.</li>
+      <li>Click again to stop — the recording downloads automatically.</li>
+    </ol>
+  </section>
+
+  <!-- ══════════════════════════════════════════ -->
+  <section id="settings">
+    <h2>Settings</h2>
+    <p>Open with the <strong>⚙ Settings</strong> button in the action bar. All settings are saved automatically and persist across sessions.</p>
+
+    <h3>Video Tab</h3>
+    <table>
+      <thead><tr><th>Setting</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>Current Resolution</td><td>Displays the active width × height @ FPS</td></tr>
+        <tr><td>Recheck Video Settings</td><td>Re-test all resolution/FPS combinations for this device</td></tr>
+        <tr><td>Resolution &amp; FPS</td><td>Select a tested, confirmed-working combination</td></tr>
+        <tr><td>Apply Resolution &amp; Frame Rate Settings</td><td>Apply the selected combination to the stream</td></tr>
+        <tr><td>Video Fit Mode</td><td>contain / fill / cover / none</td></tr>
+        <tr><td>Rotation</td><td>0° / 90° / −90° / 180°</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Settings Tab</h3>
+    <table>
+      <thead><tr><th>Setting</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>Baud Rate</td><td>9600 / 57600 / 115200 — must match adapter firmware</td></tr>
+        <tr><td>Keyboard Compatible Mode</td><td>Alternate HID format for Linux and older systems</td></tr>
+        <tr><td>Auto Capture Mouse</td><td>Capture mouse on click without a confirmation prompt</td></tr>
+        <tr><td>Auto-Open QR Code Links</td><td>Open scanned QR code URLs automatically in a new tab</td></tr>
+        <tr><td>Auto-Open OCR Extracted URLs</td><td>Open URLs found in extracted OCR text automatically</td></tr>
+        <tr><td>Adv. Text Escape Sequence</td><td>Choose delimiter style: <code>[[ ]]</code>, <code>{{ }}</code>, or <code>|| ||</code></td></tr>
+        <tr><td>Cursor Mode</td><td>absolute (default) or relative</td></tr>
+        <tr><td>Absolute Mouse Area Width</td><td>Percentage of video width that maps to the target (0–100%)</td></tr>
+        <tr><td>Absolute Mouse Area Height</td><td>Percentage of video height that maps to the target (0–100%)</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Macros Tab</h3>
+    <p>Full macro management — see the <a href="#macros">Macros</a> section for details.</p>
+  </section>
+
+  <!-- ══════════════════════════════════════════ -->
+  <section id="command-reference">
+    <h2>Advanced Text Command Reference</h2>
+    <p>Use these commands inside escape markers. Commands are case-insensitive.</p>
+    <p>Default style example: <code>[[ENTER]]</code> &nbsp;·&nbsp; <code>[[CTRL+C]]</code> &nbsp;·&nbsp; <code>[[DELAY=2]]</code></p>
+
+    <h3>Timing</h3>
+    <table>
+      <thead><tr><th>Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>DELAY=N</code></td><td>Pause for N seconds. Decimals supported (e.g. <code>DELAY=0.5</code>)</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Navigation &amp; Editing</h3>
+    <table>
+      <thead><tr><th>Command</th><th>Key</th></tr></thead>
+      <tbody>
+        <tr><td><code>ENTER</code></td><td>Return</td></tr>
+        <tr><td><code>ESCAPE</code> · <code>ESC</code></td><td>Escape</td></tr>
+        <tr><td><code>TAB</code></td><td>Tab</td></tr>
+        <tr><td><code>SPACE</code></td><td>Space bar</td></tr>
+        <tr><td><code>BACKSPACE</code></td><td>Backspace</td></tr>
+        <tr><td><code>DELETE</code> · <code>DEL</code></td><td>Delete</td></tr>
+        <tr><td><code>INSERT</code></td><td>Insert</td></tr>
+        <tr><td><code>HOME</code></td><td>Home</td></tr>
+        <tr><td><code>END</code></td><td>End</td></tr>
+        <tr><td><code>PAGEUP</code></td><td>Page Up</td></tr>
+        <tr><td><code>PAGEDOWN</code></td><td>Page Down</td></tr>
+        <tr><td><code>UP</code> · <code>ARROWUP</code></td><td>↑ Arrow</td></tr>
+        <tr><td><code>DOWN</code> · <code>ARROWDOWN</code></td><td>↓ Arrow</td></tr>
+        <tr><td><code>LEFT</code> · <code>ARROWLEFT</code></td><td>← Arrow</td></tr>
+        <tr><td><code>RIGHT</code> · <code>ARROWRIGHT</code></td><td>→ Arrow</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Function Keys</h3>
+    <div class="cmd-grid">
+      <code>F1</code><code>F2</code><code>F3</code><code>F4</code>
+      <code>F5</code><code>F6</code><code>F7</code><code>F8</code>
+      <code>F9</code><code>F10</code><code>F11</code><code>F12</code>
+    </div>
+
+    <h3>Lock &amp; System Keys</h3>
+    <table>
+      <thead><tr><th>Command</th><th>Key</th></tr></thead>
+      <tbody>
+        <tr><td><code>CAPSLOCK</code></td><td>Caps Lock</td></tr>
+        <tr><td><code>NUMLOCK</code></td><td>Num Lock</td></tr>
+        <tr><td><code>SCROLLLOCK</code></td><td>Scroll Lock</td></tr>
+        <tr><td><code>PAUSE</code></td><td>Pause / Break</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Modifier Combinations</h3>
+    <p>Combine modifiers and a key using <code>+</code>. Multiple modifiers are supported.</p>
+    <table>
+      <thead><tr><th>Modifier</th><th>Aliases</th></tr></thead>
+      <tbody>
+        <tr><td><code>CTRL</code></td><td><code>CONTROL</code></td></tr>
+        <tr><td><code>SHIFT</code></td><td>—</td></tr>
+        <tr><td><code>ALT</code></td><td>—</td></tr>
+        <tr><td><code>WIN</code></td><td><code>META</code> · <code>CMD</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3>Common Combination Examples</h3>
+    <table>
+      <thead><tr><th>Command</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td><code>[[CTRL+C]]</code></td><td>Copy</td></tr>
+        <tr><td><code>[[CTRL+V]]</code></td><td>Paste</td></tr>
+        <tr><td><code>[[CTRL+Z]]</code></td><td>Undo</td></tr>
+        <tr><td><code>[[CTRL+SHIFT+Z]]</code></td><td>Redo</td></tr>
+        <tr><td><code>[[ALT+F4]]</code></td><td>Close window</td></tr>
+        <tr><td><code>[[CTRL+ALT+DEL]]</code></td><td>Secure attention sequence</td></tr>
+        <tr><td><code>[[WIN+M]]</code></td><td>Minimise all windows</td></tr>
+        <tr><td><code>[[WIN+L]]</code></td><td>Lock screen</td></tr>
+        <tr><td><code>[[SHIFT+TAB]]</code></td><td>Reverse tab order</td></tr>
+        <tr><td><code>[[CTRL+SHIFT+ESC]]</code></td><td>Open Task Manager (Windows)</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Full Script Example</h3>
+    <pre><code>[[CTRL+ALT+DEL]]
+[[DELAY=2]]
+admin[[TAB]][[DELAY=0.5]]P@ssw0rd[[ENTER]]
+[[DELAY=3]]
+[[WIN+R]]
+[[DELAY=0.5]]
+cmd[[ENTER]]
+[[DELAY=1]]
+ipconfig /all[[ENTER]]</code></pre>
+
+  </section>
+
+</main>
+
+<script>
+  // Highlight active sidebar link on scroll
+  const sections = document.querySelectorAll('section[id]')
+  const navLinks = document.querySelectorAll('#sidebar nav a')
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navLinks.forEach(a => a.classList.remove('active'))
+        const active = document.querySelector(`#sidebar nav a[href="#${entry.target.id}"]`)
+        if (active) active.classList.add('active')
+      }
+    })
+  }, { rootMargin: '-20% 0px -70% 0px' })
+
+  sections.forEach(s => observer.observe(s))
+</script>
+</body>
+</html>

@@ -487,7 +487,7 @@
       "gencad": "",
       "idf": "",
       "netlist": "",
-      "plot": "",
+      "plot": "fab-files/",
       "pos_files": "",
       "specctra_dsn": "",
       "step": "../../../../../Users/s3711/Desktop/kitbashkvm-protoboard.step",
