@@ -1,18 +1,20 @@
 <script setup lang="ts">
 import KbIcon from '@/components/KBKvmController/UI/KbIcon.vue'
 import {ref} from 'vue'
-import {window} from '@tauri-apps/api'
+import {useAppFullscreen} from '@/components/KBKvmController/utils/app-fullscreen'
 
-let curWin = window.getCurrent()
-const isFullscreen = ref(false)
-function toggleFullScreen() {
-  isFullscreen.value = !isFullscreen.value
-  curWin.setFullscreen(isFullscreen.value)
-}
+// Same fullscreen state as double-clicking the video
+const {isFullscreen, toggle: toggleFullScreen} = useAppFullscreen()
+
 const isTop = ref(false)
-function toggleTop() {
-  isTop.value = !isTop.value
-  curWin.setAlwaysOnTop(isTop.value)
+const toggleTop = async () => {
+  try {
+    const {appWindow} = await import('@tauri-apps/api/window')
+    await appWindow.setAlwaysOnTop(!isTop.value)
+    isTop.value = !isTop.value
+  } catch (error) {
+    window.$notification({type: 'error', message: `Keep on top failed: ${(error as Error)?.message ?? error}`, timeout: 4000})
+  }
 }
 </script>
 

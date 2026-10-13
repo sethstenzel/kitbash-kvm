@@ -5,6 +5,14 @@ Versions follow [Semantic Versioning](https://semver.org/): **MAJOR** for breaki
 **MINOR** for new features, **PATCH** for fixes. The version lives in `package.json` and is
 used by the web app (Settings > Advanced > About) and the desktop installers.
 
+## [2.3.2] - 2026-10-13
+
+### Fixed
+- Desktop app: fullscreen could fail with "TypeError: not granted" (WebView2 refusing the browser
+  Fullscreen API, used when double-clicking the video). All fullscreen toggles in the desktop app
+  now use the window's fullscreen, share one state with the command bar button, and report a
+  failure as a notification instead of an uncaught error.
+
 ## [2.3.1] - 2026-10-13
 
 ### Changed

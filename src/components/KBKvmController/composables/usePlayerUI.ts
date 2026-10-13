@@ -1,6 +1,6 @@
 import {ref, computed, type Ref} from 'vue'
-import {useFullscreen} from '@vueuse/core'
 import {useSettingsStore} from '@/stores/settings'
+import {useAppFullscreen} from '@/components/KBKvmController/utils/app-fullscreen'
 
 interface UsePlayerUIOptions {
   isShowFloatBar: Ref<boolean>
@@ -20,10 +20,8 @@ export function usePlayerUI(options: UsePlayerUIOptions) {
   const loadingText = ref('')
   const criticalError = ref<{message: string; details?: string} | null>(null)
 
-  // Fullscreen
-  // Whole document, not just the player: dropdowns, notifications and prompts are teleported
-  // to <body> and would be invisible if only the player element were fullscreen
-  const {toggle: toggleFullScreen, isFullscreen} = useFullscreen(document.documentElement)
+  // Fullscreen (window fullscreen in the desktop app, document fullscreen in the browser)
+  const {toggle: toggleFullScreen, isFullscreen} = useAppFullscreen()
 
   // Computed
   const isActionBarVisible = computed(() => {
