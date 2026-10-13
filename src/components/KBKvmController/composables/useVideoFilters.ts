@@ -1,6 +1,6 @@
 import {computed, type Ref} from 'vue'
 import {useElementSize} from '@vueuse/core'
-import {useSettingsStore, isValidCssFilter} from '@/stores/settings'
+import {useSettingsStore} from '@/stores/settings'
 
 interface UseVideoFiltersOptions {
   graphInfo: Ref<{width: number; height: number; aspectRatio: number}>
@@ -39,12 +39,6 @@ export function useVideoFilters(options: UseVideoFiltersOptions) {
       style.transform = transforms.join(' ')
     }
 
-    // An invalid custom filter falls back to the presets instead of silently dropping all filtering
-    if (settingsStore.inputFilter && isValidCssFilter(settingsStore.inputFilter)) {
-      style.filter = settingsStore.inputFilter
-    } else if (settingsStore.selectedFilters?.length) {
-      style.filter = settingsStore.selectedFilters.join(' ')
-    }
     if (settingsStore.fitMode) {
       style.objectFit = settingsStore.fitMode
     }

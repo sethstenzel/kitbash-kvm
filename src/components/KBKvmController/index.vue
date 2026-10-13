@@ -6,6 +6,7 @@ export default {
 
 <script setup lang="ts">
 import KbIcon from '@/components/KBKvmController/UI/KbIcon.vue'
+import ActionDropdown from '@/components/KBKvmController/UI/ActionDropdown.vue'
 import {onMounted, ref, computed, onBeforeUnmount} from 'vue'
 import TauriActions from '@/components/KBKvmController/TauriActions.vue'
 import {useSettingsStore} from '@/stores/settings'
@@ -264,6 +265,12 @@ const enhancedDeviceInfo = computed(() => {
 })
 
 // Set when the selected capture device was unplugged, so it can resume when plugged back in
+// Device pickers: the empty entry turns the source off
+const toSourceOptions = (list: Array<{label: string; deviceId: string}>) =>
+  list.map((d) => ({value: d.deviceId, label: d.deviceId ? d.label || 'Unnamed device' : 'None'}))
+const videoSourceOptions = computed(() => toSourceOptions(videoDeviceList.value))
+const audioSourceOptions = computed(() => toSourceOptions(audioDeviceList.value))
+
 /**
  * Listen for device change events
  */
@@ -513,71 +520,45 @@ onBeforeUnmount(() => {
         <transition name="fade-left">
           <div style="transition-delay: 0.3s" v-show="isActionBarVisible" class="action-bar-side">
             <div class="flex-row-center-gap">
-              <label
-                class="select-label-wrapper"
-                for="videoSelect"
-                title="Select Video Device"
-                :class="{activated: settingsStore.currentVideoDeviceId}"
+              <ActionDropdown
+                v-if="permissionCamera === 'granted'"
+                :icon="isStreaming ? 'video-source-live' : 'video-source'"
+                title="Video Source"
+                placeholder="No video devices found"
+                selectable
+                :options="videoSourceOptions"
+                v-model="settingsStore.currentVideoDeviceId"
+                @change="handleStartStreaming"
+              />
+              <button
+                v-else
+                class="btn-no-style device-permission"
+                :title="`Camera permission: ${permissionCamera}. Click to request access.`"
+                @click="requirePermission"
               >
                 <KbIcon name="video-source" />
-                <template v-if="permissionCamera === 'granted'">
-                  <select
-                    class="btn-no-style"
-                    id="videoSelect"
-                    v-model="settingsStore.currentVideoDeviceId"
-                    @change="handleStartStreaming"
-                  >
-                    <option
-                      v-for="item in videoDeviceList"
-                      :key="item.deviceId"
-                      :value="item.deviceId"
-                    >
-                      {{ item.label }}
-                    </option>
-                  </select>
-                </template>
-                <button
-                  :title="permissionCamera"
-                  class="btn-no-style icon-alert"
-                  v-else
-                  @click="requirePermission"
-                >
-                  <KbIcon name="warning" :size="14" />
-                </button>
-              </label>
+                <KbIcon class="permission-badge" name="warning" :size="14" />
+              </button>
 
-              <label
-                class="select-label-wrapper"
-                for="audioSelect"
-                title="Select Audio Device"
-                :class="{activated: settingsStore.currentAudioDeviceId}"
+              <ActionDropdown
+                v-if="permissionMicrophone === 'granted'"
+                icon="audio-source"
+                title="Audio Source"
+                placeholder="No audio devices found"
+                selectable
+                :options="audioSourceOptions"
+                v-model="settingsStore.currentAudioDeviceId"
+                @change="handleStartStreaming"
+              />
+              <button
+                v-else
+                class="btn-no-style device-permission"
+                :title="`Microphone permission: ${permissionMicrophone}. Click to request access.`"
+                @click="requirePermission"
               >
                 <KbIcon name="audio-source" />
-                <template v-if="permissionMicrophone === 'granted'">
-                  <select
-                    class="btn-no-style"
-                    id="audioSelect"
-                    v-model="settingsStore.currentAudioDeviceId"
-                    @change="handleStartStreaming"
-                  >
-                    <option
-                      v-for="item in audioDeviceList"
-                      :key="item.deviceId"
-                      :value="item.deviceId"
-                    >
-                      {{ item.label }}
-                    </option>
-                  </select>
-                </template>
-                <button
-                  class="btn-no-style icon-alert"
-                  :title="permissionMicrophone"
-                  v-else
-                  @click="requirePermission"
-                >
-                  <KbIcon name="warning" :size="14" />
-                </button>
-              </label>
+                <KbIcon class="permission-badge" name="warning" :size="14" />
+              </button>
 
               <button
                 class="btn-no-style orange"
@@ -719,7 +700,6 @@ onBeforeUnmount(() => {
           id="streamVideo"
           autoplay
           playsinline
-          :controls="settingsStore.isShowControls"
           :style="videoFilterStyle"
           v-show="!loadingText"
         ></video>
@@ -799,7 +779,7 @@ onBeforeUnmount(() => {
     .action-bar {
       height: 100%;
       padding: 5px;
-      background: linear-gradient(180deg, rgba(0, 0, 0, 0.53), transparent);
+      background: #004264;
       transition: opacity 0.3s;
       display: flex;
       align-items: center;
@@ -817,11 +797,11 @@ onBeforeUnmount(() => {
       }
 
       &.float-bar {
-        // KitBash palette: frosted charcoal panel with the logo's orange / red / navy as a base stripe
+        // Logo blue (the "M" in KVM) with light-white icons
         position: relative;
-        background: rgba(16, 21, 27, 0.86);
+        background: rgba(0, 66, 100, 0.94);
         backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.12);
         border-top: none;
         border-radius: 0 0 18px 18px;
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
@@ -831,7 +811,7 @@ onBeforeUnmount(() => {
         width: max-content;
         max-width: calc(100vw - 16px);
         height: 50px;
-        padding: 4px 16px 6px;
+        padding: 4px 16px;
 
         visibility: hidden;
         opacity: 0;
@@ -840,19 +820,6 @@ onBeforeUnmount(() => {
           opacity 0.15s ease,
           transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.15),
           visibility 0s linear 0.35s;
-
-        &::after {
-          content: '';
-          position: absolute;
-          left: 18px;
-          right: 18px;
-          bottom: 0;
-          height: 2px;
-          border-radius: 2px;
-          background: linear-gradient(90deg, #ffa01e 0 33%, #ff3f1e 33% 66%, #2a7bb0 66% 100%);
-          opacity: 0.85;
-          pointer-events: none;
-        }
 
         &.visible {
           visibility: visible;
@@ -868,41 +835,6 @@ onBeforeUnmount(() => {
           gap: 4px;
         }
 
-        .select-label-wrapper {
-          width: 34px;
-          height: 34px;
-          padding: 0;
-          justify-content: center;
-
-          &::after {
-            left: 9px;
-            right: 9px;
-            bottom: 2px;
-          }
-
-          select {
-            position: absolute;
-            z-index: 2;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            opacity: 0;
-            cursor: pointer;
-          }
-
-          .icon-alert {
-            position: absolute;
-            z-index: 2;
-            right: -2px;
-            bottom: -2px;
-            min-width: 0;
-            width: auto;
-            height: auto;
-            padding: 0;
-            background: none;
-          }
-        }
       }
 
       span,
@@ -912,58 +844,6 @@ onBeforeUnmount(() => {
 
       a {
         text-decoration: none;
-      }
-
-      .select-label-wrapper {
-        position: relative;
-        display: flex;
-        align-items: center;
-        border-radius: 9px;
-        padding: 4px 6px;
-        transition:
-          background-color 0.2s ease,
-          transform 0.2s ease;
-
-        &:hover {
-          background-color: rgba(255, 255, 255, 0.09);
-          transform: translateY(-1px);
-        }
-
-        &::after {
-          content: ' ';
-          position: absolute;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          height: 2px;
-          background-color: rgba(255, 255, 255, 0.18);
-          border-radius: 10px;
-          pointer-events: none;
-          transition: all 0.3s ease;
-        }
-
-        // Device selected
-        &.activated::after {
-          background-color: #ffa01e;
-          box-shadow: 0 0 6px rgba(255, 160, 30, 0.7);
-        }
-
-        .kb-icon {
-          position: relative;
-          z-index: 1;
-        }
-      }
-
-      select {
-        width: 50px;
-        line-height: 1;
-        font-size: 12px;
-        background: black !important;
-
-        option {
-          color: white;
-          background: #252525;
-        }
       }
 
       .action-bar-side {
@@ -977,20 +857,17 @@ onBeforeUnmount(() => {
           flex-wrap: nowrap;
         }
 
-        label {
-          display: flex;
-          align-items: center;
-          gap: 2.5px;
-        }
-
         .btn-no-style.active {
-          background-color: rgba(255, 160, 30, 0.14);
-          box-shadow: inset 0 0 0 1px rgba(255, 160, 30, 0.55);
+          background-color: rgba(255, 255, 255, 0.16);
+          box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55);
         }
-      }
 
-      select {
-        width: 125px;
+        // Camera/microphone permission not granted yet
+        .device-permission .permission-badge {
+          position: absolute;
+          right: 1px;
+          bottom: 1px;
+        }
       }
 
       .mdi {
@@ -1021,7 +898,7 @@ onBeforeUnmount(() => {
         }
 
         &:hover:not(:disabled) {
-          background-color: rgba(255, 255, 255, 0.09);
+          background-color: rgba(255, 255, 255, 0.13);
 
           .kb-icon {
             transform: translateY(-1px) scale(1.08);
@@ -1033,7 +910,7 @@ onBeforeUnmount(() => {
         }
 
         &:focus-visible {
-          outline: 2px solid #ffa01e;
+          outline: 2px solid rgba(255, 255, 255, 0.85);
           outline-offset: 1px;
         }
 
@@ -1047,7 +924,7 @@ onBeforeUnmount(() => {
       .menu-separator {
         width: 1px;
         height: 22px;
-        background: rgba(255, 255, 255, 0.14);
+        background: rgba(255, 255, 255, 0.22);
         margin: 0 6px;
       }
     }

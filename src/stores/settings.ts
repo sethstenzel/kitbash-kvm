@@ -25,23 +25,9 @@ export interface ICameraCapabilities {
 // Bump when persisted settings need a migration step (see migrate())
 const CURRENT_SETTINGS_VERSION = 1
 
-export const FILTER_OPTIONS = [
-  {value: 'grayscale(1)', label: 'Grayscale'},
-  {value: 'sepia(1)', label: 'Sepia'},
-  {value: 'contrast(3)', label: 'Contrast'},
-  {value: 'hue-rotate(90deg)', label: 'Hue rotate'},
-  {value: 'blur(10px)', label: 'Blur'},
-  {value: 'invert(1)', label: 'Invert'},
-  {value: 'brightness(2)', label: 'Brightness'},
-]
-
-export const isValidCssFilter = (value: unknown) =>
-  typeof value === 'string' && (!value || CSS.supports('filter', value))
-
 interface ISettings {
   // Version of the persisted settings shape; 0 = saved before versioning existed
   settingsVersion: number
-  isShowControls: boolean
   fitMode: string
   floatUI: boolean
   enableKvmInput: boolean
@@ -57,8 +43,6 @@ interface ISettings {
   filterMirrorY: boolean
   filterRotation: number // Rotation in degrees: 0, 90, -90, 180
   filterShowFg: boolean
-  selectedFilters: string[]
-  inputFilter: string
   currentVideoDeviceId: string
   currentAudioDeviceId: string
   // User-chosen video mode for currentVideoDeviceId (null = auto/default mode)
@@ -83,7 +67,6 @@ export const useSettingsStore = defineStore('settingsStore', {
   state: (): ISettings => {
     return {
       settingsVersion: 0,
-      isShowControls: false,
       fitMode: 'contain',
       floatUI: true,
       enableKvmInput: true,
@@ -97,8 +80,6 @@ export const useSettingsStore = defineStore('settingsStore', {
       filterMirrorY: false,
       filterRotation: 0,
       filterShowFg: false,
-      selectedFilters: [],
-      inputFilter: '',
       currentVideoDeviceId: '',
       currentAudioDeviceId: '',
       videoConfig: null,
@@ -118,28 +99,32 @@ export const useSettingsStore = defineStore('settingsStore', {
         return
       }
       if (this.settingsVersion < 1) {
-        // Drop malformed CSS filters (they had no UI and could leave the video unfiltered or broken)
-        if (
-          !Array.isArray(this.selectedFilters) ||
-          !this.selectedFilters.every((f) => f && isValidCssFilter(f))
-        ) {
-          this.selectedFilters = []
-        }
-        if (!isValidCssFilter(this.inputFilter)) {
-          this.inputFilter = ''
-        }
         // The float bar visibility used to be persisted separately
         localStorage.removeItem('wmd__is_show_float_bar')
       }
       this.settingsVersion = CURRENT_SETTINGS_VERSION
     },
-    /** Rotation, flips, CSS filters and fit mode back to defaults */
+    /**
+     * Every preference back to its default. Keeps the selected devices and their tested
+     * capabilities (see "Reset Video & Audio Devices" for those); macros live in their own store.
+     */
+    resetAllSettings() {
+      const {currentVideoDeviceId, currentAudioDeviceId, cameraCapabilities, cameraCapabilitiesCache, settingsVersion} =
+        this.$state
+      this.$reset()
+      this.$patch({
+        currentVideoDeviceId,
+        currentAudioDeviceId,
+        cameraCapabilities,
+        cameraCapabilitiesCache,
+        settingsVersion,
+      })
+    },
+    /** Rotation, flips and fit mode back to defaults */
     resetDisplaySettings() {
       this.filterRotation = 0
       this.filterMirrorX = false
       this.filterMirrorY = false
-      this.selectedFilters = []
-      this.inputFilter = ''
       this.fitMode = 'contain'
     },
   },
@@ -148,7 +133,6 @@ export const useSettingsStore = defineStore('settingsStore', {
     // Don't persist cameraCapabilities as they need to be queried fresh each time
     paths: [
       'settingsVersion',
-      'isShowControls',
       'fitMode',
       'floatUI',
       'enableKvmInput',
@@ -161,8 +145,6 @@ export const useSettingsStore = defineStore('settingsStore', {
       'filterMirrorY',
       'filterRotation',
       'filterShowFg',
-      'selectedFilters',
-      'inputFilter',
       'currentVideoDeviceId',
       'currentAudioDeviceId',
       'videoConfig',

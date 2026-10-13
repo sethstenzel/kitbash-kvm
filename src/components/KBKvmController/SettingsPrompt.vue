@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {ref, watch, computed, nextTick, onMounted, onBeforeUnmount} from 'vue'
 import {useVModel} from '@vueuse/core'
-import {useSettingsStore, FILTER_OPTIONS, isValidCssFilter} from '@/stores/settings'
+import {useSettingsStore} from '@/stores/settings'
 import {DEFAULT_VIDEO_MODE, type IStreamInfo} from '@/components/KBKvmController/composables/useMediaStream'
 import {useMacrosStore, type IMacro} from '@/stores/macros'
 import MacroDialog from '@/components/MacroDialog/MacroDialog.vue'
@@ -65,8 +65,6 @@ const handleRecheckResolutions = () => {
   emit('recheck-resolutions')
 }
 
-const filterOptions = FILTER_OPTIONS
-const isInputFilterValid = computed(() => isValidCssFilter(settingsStore.inputFilter))
 
 const resetDisplaySettings = () => {
   settingsStore.resetDisplaySettings()
@@ -100,6 +98,23 @@ const activeTab = ref<'video' | 'settings' | 'macros' | 'advanced'>('video')
 
 const resetDeviceData = () => {
   emit('reset-devices')
+}
+
+const resetAllSettings = () => {
+  if (!confirm('Reset all settings to their defaults? Device selections and macros are kept.')) {
+    return
+  }
+  const hadChosenResolution = !!settingsStore.videoConfig?.userSelected
+  settingsStore.resetAllSettings()
+  // Re-open the running stream in the default (auto) mode instead of the previously chosen one
+  if (hadChosenResolution && props.graphInfo) {
+    emit('apply-resolution', null)
+  }
+  window.$notification({
+    type: 'success',
+    message: 'All settings reset to defaults',
+    timeout: 3000,
+  })
 }
 
 const showCursorModeTip = () => {
@@ -471,62 +486,26 @@ const handleImportMacros = () => {
                   </div>
 
                   <div class="flip-rotate-right">
-                    <!-- filterMirrorY applies rotateY(180deg): a left-right mirror -->
-                    <div class="form-group-checkbox">
-                      <label class="checkbox-label">
-                        <input type="checkbox" v-model="settingsStore.filterMirrorY" class="checkbox-input" />
-                        <span class="checkbox-text">
-                          <span class="mdi mdi-flip-horizontal"></span>
-                          Mirror (left-right)
-                        </span>
+                    <div class="form-group">
+                      <label class="form-label-small">
+                        <span class="mdi mdi-flip-horizontal"></span>
+                        Flip
                       </label>
-                    </div>
-                    <!-- filterMirrorX applies rotateX(180deg): an upside-down flip -->
-                    <div class="form-group-checkbox">
-                      <label class="checkbox-label">
-                        <input type="checkbox" v-model="settingsStore.filterMirrorX" class="checkbox-input" />
-                        <span class="checkbox-text">
-                          <span class="mdi mdi-flip-vertical"></span>
-                          Flip upside down
-                        </span>
-                      </label>
+                      <!-- Same tiles as Rotate; checkboxes because both flips can be combined -->
+                      <div class="radio-group-vertical">
+                        <!-- filterMirrorY applies rotateY(180deg): a left-right mirror -->
+                        <label class="radio-label-compact">
+                          <input type="checkbox" v-model="settingsStore.filterMirrorY" class="radio-input" />
+                          <span class="radio-text">Mirror (left-right)</span>
+                        </label>
+                        <!-- filterMirrorX applies rotateX(180deg): an upside-down flip -->
+                        <label class="radio-label-compact">
+                          <input type="checkbox" v-model="settingsStore.filterMirrorX" class="radio-input" />
+                          <span class="radio-text">Flip upside down</span>
+                        </label>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
-
-              <div class="settings-section">
-                <div class="section-header">
-                  <span class="mdi mdi-palette"></span>
-                  <h3>Color Filters</h3>
-                </div>
-                <div class="radio-group-vertical filter-grid">
-                  <label class="radio-label-compact" v-for="option in filterOptions" :key="option.value">
-                    <input
-                      type="checkbox"
-                      :value="option.value"
-                      v-model="settingsStore.selectedFilters"
-                      :disabled="!!settingsStore.inputFilter && isInputFilterValid"
-                      class="radio-input"
-                    />
-                    <span class="radio-text">{{ option.label }}</span>
-                  </label>
-                </div>
-                <div class="form-group">
-                  <label class="form-label-small" for="settings-input-filter">
-                    <span class="mdi mdi-code-parentheses"></span>
-                    Custom CSS filter (overrides the presets above)
-                  </label>
-                  <input
-                    id="settings-input-filter"
-                    v-model.trim="settingsStore.inputFilter"
-                    type="text"
-                    class="form-input"
-                    :class="{invalid: !isInputFilterValid}"
-                    placeholder="e.g. brightness(1.2) contrast(1.1)"
-                    spellcheck="false"
-                  />
-                  <span v-if="!isInputFilterValid" class="input-error">Not a valid CSS filter; the presets above are used instead</span>
                 </div>
               </div>
 
@@ -544,19 +523,10 @@ const handleImportMacros = () => {
                     </span>
                   </label>
                 </div>
-                <div class="form-group-checkbox">
-                  <label class="checkbox-label">
-                    <input type="checkbox" v-model="settingsStore.isShowControls" class="checkbox-input" />
-                    <span class="checkbox-text">
-                      <span class="mdi mdi-play-box-outline"></span>
-                      Show native video controls
-                    </span>
-                  </label>
-                </div>
                 <div class="advanced-row">
                   <div class="advanced-row-info">
                     <span class="advanced-row-label">Reset display settings</span>
-                    <span class="advanced-row-desc">Rotation, flips, color filters and fit mode back to defaults.</span>
+                    <span class="advanced-row-desc">Rotation, flips and fit mode back to defaults.</span>
                   </div>
                   <button class="btn-advanced-secondary" @click="resetDisplaySettings">
                     <span class="mdi mdi-restore"></span>
@@ -668,27 +638,6 @@ const handleImportMacros = () => {
 
                 <div class="form-group">
                   <label class="form-label">
-                    <span class="mdi mdi-code-brackets"></span>
-                    Adv. Text Escape Sequence
-                  </label>
-                  <div class="radio-group">
-                    <label class="radio-label">
-                      <input type="radio" value="square" v-model="settingsStore.advancedTextEscapeStyle" class="radio-input" />
-                      <span class="radio-text">[[ ]]</span>
-                    </label>
-                    <label class="radio-label">
-                      <input type="radio" value="curly" v-model="settingsStore.advancedTextEscapeStyle" class="radio-input" />
-                      <span class="radio-text" v-text="'{{ }}'"></span>
-                    </label>
-                    <label class="radio-label">
-                      <input type="radio" value="pipe" v-model="settingsStore.advancedTextEscapeStyle" class="radio-input" />
-                      <span class="radio-text">|| ||</span>
-                    </label>
-                  </div>
-                </div>
-
-                <div class="form-group">
-                  <label class="form-label">
                     <span class="mdi mdi-cursor-default"></span>
                     Cursor Mode
                     <button class="info-btn" @click="showCursorModeTip">
@@ -756,6 +705,29 @@ const handleImportMacros = () => {
                   </button>
                 </div>
               </div>
+
+              <div class="settings-section">
+                <div class="section-header">
+                  <span class="mdi mdi-code-brackets"></span>
+                  <h3>Adv. Text Escape Sequence</h3>
+                </div>
+                <div class="form-group">
+                  <div class="radio-group">
+                    <label class="radio-label">
+                      <input type="radio" value="square" v-model="settingsStore.advancedTextEscapeStyle" class="radio-input" />
+                      <span class="radio-text">[[ ]]</span>
+                    </label>
+                    <label class="radio-label">
+                      <input type="radio" value="curly" v-model="settingsStore.advancedTextEscapeStyle" class="radio-input" />
+                      <span class="radio-text" v-text="'{{ }}'"></span>
+                    </label>
+                    <label class="radio-label">
+                      <input type="radio" value="pipe" v-model="settingsStore.advancedTextEscapeStyle" class="radio-input" />
+                      <span class="radio-text">|| ||</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div class="tab-col">
@@ -817,6 +789,16 @@ const handleImportMacros = () => {
                   <button class="btn-advanced-danger" @click="resetDeviceData">
                     <span class="mdi mdi-delete-sweep"></span>
                     Reset Device Data
+                  </button>
+                </div>
+                <div class="advanced-row">
+                  <div class="advanced-row-info">
+                    <span class="advanced-row-label">Reset All Settings</span>
+                    <span class="advanced-row-desc">Restores every option in Settings to its default: video, keyboard &amp; mouse, baud rate, display and escape sequence. Device selections and macros are kept.</span>
+                  </div>
+                  <button class="btn-advanced-danger" @click="resetAllSettings">
+                    <span class="mdi mdi-restore-alert"></span>
+                    Reset Settings
                   </button>
                 </div>
               </div>
@@ -896,7 +878,7 @@ const handleImportMacros = () => {
 
       .mdi {
         font-size: 24px;
-        color: #ffa01e;
+        color: #5aa9dc;
       }
     }
 
@@ -957,8 +939,8 @@ const handleImportMacros = () => {
       }
 
       &.active {
-        color: #ffa01e;
-        border-bottom-color: #ffa01e;
+        color: #5aa9dc;
+        border-bottom-color: #2a7bb0;
       }
     }
   }
@@ -1026,7 +1008,7 @@ const handleImportMacros = () => {
 
       .mdi {
         font-size: 20px;
-        color: #ffa01e;
+        color: #5aa9dc;
       }
 
       h3 {
@@ -1042,14 +1024,14 @@ const handleImportMacros = () => {
     display: flex;
     gap: 12px;
     padding: 12px 16px;
-    background: rgba(255, 160, 30, 0.1);
-    border: 1px solid rgba(255, 160, 30, 0.3);
+    background: rgba(42, 123, 176, 0.1);
+    border: 1px solid rgba(42, 123, 176, 0.3);
     border-radius: 8px;
     margin-bottom: 16px;
 
     .mdi {
       font-size: 20px;
-      color: #ffa01e;
+      color: #5aa9dc;
       flex-shrink: 0;
       margin-top: 2px;
     }
@@ -1069,7 +1051,7 @@ const handleImportMacros = () => {
 
       .info-value {
         font-size: 14px;
-        color: #ffa01e;
+        color: #5aa9dc;
         font-family: 'Courier New', monospace;
         font-weight: 500;
       }
@@ -1129,7 +1111,7 @@ const handleImportMacros = () => {
   .btn-apply {
     width: 100%;
     padding: 12px 16px;
-    background: linear-gradient(135deg, #ffa01e 0%, #ff8c00 100%);
+    background: linear-gradient(135deg, #2a7bb0 0%, #004264 100%);
     border: none;
     border-radius: 8px;
     color: white;
@@ -1148,9 +1130,9 @@ const handleImportMacros = () => {
     }
 
     &:hover:not(:disabled) {
-      background: linear-gradient(135deg, #ffb84d 0%, #ffa01e 100%);
+      background: linear-gradient(135deg, #3d8fc4 0%, #2a7bb0 100%);
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(255, 160, 30, 0.4);
+      box-shadow: 0 4px 12px rgba(42, 123, 176, 0.4);
     }
 
     &:active:not(:disabled) {
@@ -1158,7 +1140,7 @@ const handleImportMacros = () => {
     }
 
     &:disabled {
-      background: rgba(255, 160, 30, 0.3);
+      background: rgba(42, 123, 176, 0.3);
       cursor: not-allowed;
       opacity: 0.5;
     }
@@ -1168,7 +1150,7 @@ const handleImportMacros = () => {
     width: 100%;
     padding: 12px 16px;
     background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 160, 30, 0.3);
+    border: 1px solid rgba(42, 123, 176, 0.3);
     border-radius: 8px;
     color: rgba(255, 255, 255, 0.9);
     font-size: 14px;
@@ -1186,8 +1168,8 @@ const handleImportMacros = () => {
     }
 
     &:hover {
-      background: rgba(255, 160, 30, 0.1);
-      border-color: rgba(255, 160, 30, 0.5);
+      background: rgba(42, 123, 176, 0.1);
+      border-color: rgba(42, 123, 176, 0.5);
       transform: translateY(-1px);
     }
 
@@ -1226,7 +1208,7 @@ const handleImportMacros = () => {
         margin-left: auto;
 
         &:hover {
-          color: #ffa01e;
+          color: #5aa9dc;
         }
       }
     }
@@ -1250,7 +1232,7 @@ const handleImportMacros = () => {
       &:focus {
         outline: none;
         background: rgba(255, 255, 255, 0.1);
-        border-color: #ffa01e;
+        border-color: #2a7bb0;
       }
 
       option {
@@ -1280,7 +1262,7 @@ const handleImportMacros = () => {
         width: 18px;
         height: 18px;
         cursor: pointer;
-        accent-color: #ffa01e;
+        accent-color: #2a7bb0;
       }
 
       .checkbox-text {
@@ -1310,8 +1292,8 @@ const handleImportMacros = () => {
         transition: all 0.2s;
 
         &:hover {
-          color: #ffa01e;
-          background: rgba(255, 160, 30, 0.1);
+          color: #5aa9dc;
+          background: rgba(42, 123, 176, 0.1);
         }
       }
     }
@@ -1344,7 +1326,7 @@ const handleImportMacros = () => {
         width: 18px;
         height: 18px;
         cursor: pointer;
-        accent-color: #ffa01e;
+        accent-color: #2a7bb0;
         flex-shrink: 0;
       }
 
@@ -1386,13 +1368,6 @@ const handleImportMacros = () => {
     flex: 1;
   }
 
-  .radio-group-vertical.filter-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-    gap: 6px;
-    margin-bottom: 16px;
-  }
-
   .form-group .form-label-small {
     display: flex;
     align-items: center;
@@ -1406,36 +1381,6 @@ const handleImportMacros = () => {
       font-size: 16px;
       color: rgba(255, 255, 255, 0.6);
     }
-  }
-
-  .form-input {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 10px 12px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 8px;
-    color: #fff;
-    font-size: 14px;
-    font-family: 'Courier New', monospace;
-    transition: all 0.2s;
-
-    &:focus {
-      outline: none;
-      background: rgba(255, 255, 255, 0.1);
-      border-color: #ffa01e;
-    }
-
-    &.invalid {
-      border-color: rgba(244, 67, 54, 0.7);
-    }
-  }
-
-  .input-error {
-    display: block;
-    margin-top: 6px;
-    font-size: 12px;
-    color: #f44336;
   }
 
   .form-group-checkbox .checkbox-desc {
@@ -1467,11 +1412,17 @@ const handleImportMacros = () => {
         border-color: rgba(255, 255, 255, 0.2);
       }
 
+      &:has(.radio-input:checked) {
+        background: rgba(42, 123, 176, 0.14);
+        border-color: rgba(42, 123, 176, 0.6);
+      }
+
       .radio-input {
         width: 18px;
         height: 18px;
+        margin: 0;
         cursor: pointer;
-        accent-color: #ffa01e;
+        accent-color: #2a7bb0;
         flex-shrink: 0;
       }
 
@@ -1516,7 +1467,7 @@ const handleImportMacros = () => {
         transition: all 0.2s;
 
         &:focus-within {
-          border-color: #ffa01e;
+          border-color: #2a7bb0;
           background: rgba(255, 255, 255, 0.08);
         }
 
@@ -1629,11 +1580,11 @@ const handleImportMacros = () => {
     }
 
     &.btn-macro-primary {
-      background: linear-gradient(135deg, #ffa01e 0%, #ff8c00 100%);
+      background: linear-gradient(135deg, #2a7bb0 0%, #004264 100%);
       color: white;
 
       &:hover {
-        background: linear-gradient(135deg, #ffb84d 0%, #ffa01e 100%);
+        background: linear-gradient(135deg, #3d8fc4 0%, #2a7bb0 100%);
       }
     }
 
@@ -1692,8 +1643,8 @@ const handleImportMacros = () => {
     &:focus {
       outline: none;
       background: rgba(255, 255, 255, 0.08);
-      border-color: rgba(255, 160, 30, 0.5);
-      box-shadow: 0 0 0 2px rgba(255, 160, 30, 0.1);
+      border-color: rgba(42, 123, 176, 0.5);
+      box-shadow: 0 0 0 2px rgba(42, 123, 176, 0.1);
     }
   }
 
@@ -1767,7 +1718,7 @@ const handleImportMacros = () => {
       .macro-name {
         font-size: 14px;
         font-weight: 600;
-        color: #ffa01e;
+        color: #5aa9dc;
       }
 
       .macro-actions-inline {

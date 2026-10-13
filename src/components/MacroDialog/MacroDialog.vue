@@ -213,7 +213,7 @@ const handleCancel = () => {
 
       .mdi {
         font-size: 22px;
-        color: #ffa01e;
+        color: #5aa9dc;
       }
     }
 

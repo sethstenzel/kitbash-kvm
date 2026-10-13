@@ -954,6 +954,7 @@ const mediaKeyOptions = (() => {
       <ActionDropdown
         icon="hotkeys"
         title="Send Common Hotkeys"
+        keycaps
         placeholder="Send Hotkey..."
         :options="specialKeyOptions"
         v-model="selectedComboKey"
